@@ -3,6 +3,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { useLanguage } from "@/app/providers/language-provider";
 
 // Unified text-entry confirm screen — Sept 16, 2026. Replaces the home
 // screen's old mode-first pair ("Start a Quick Check" / "Start a Deep
@@ -21,10 +22,12 @@ import { createClient } from "@/lib/supabase/client";
 // input_type "text", so a URL was never treated differently on the
 // backend — see lib/detect-payment-receipt.ts / detect-payment-request.ts
 // and the shared quick-check/deep-investigation pipelines, all of which
-// operate on "text-shaped input" regardless of this label). Only the
-// on-screen copy (eyebrow/heading/placeholder) differs by `?type=`, kept
-// in one COPY table below rather than as two separate page files, since
-// there is no real behavioral difference to justify duplicating the form.
+// operate on "text-shaped input" regardless of this label).
+//
+// Localized Sept 16, 2026 (Phase 1 of the multilingual rollout, see
+// lib/translations.ts) — the per-type copy that used to live in a local
+// COPY table now comes from the shared dictionary via useLanguage()'s t(),
+// keyed by "claim.text*" / "claim.url*".
 //
 // The old app/verify/page.tsx (Quick-Check-only) and app/deep/page.tsx
 // (Deep-Investigation-only) are left in place, not deleted — they're no
@@ -32,31 +35,28 @@ import { createClient } from "@/lib/supabase/client";
 // to them either (confirmed via a full grep), so leaving them costs
 // nothing and avoids an unnecessary deletion via the device bridge, which
 // can't delete files on the user's machine directly.
-const COPY: Record<
-  "text" | "url",
-  { eyebrow: string; heading: string; sub: string; placeholder: string }
-> = {
-  text: {
-    eyebrow: "VERIFY TEXT",
-    heading: "What should we verify?",
-    sub: "Paste a claim or statement, then choose Quick Check for a fast answer or Deep Investigation for a more thorough one.",
-    placeholder: "Paste a claim or statement…",
-  },
-  url: {
-    eyebrow: "VERIFY URL/CLAIMS",
-    heading: "What link or claim should we verify?",
-    sub: "Paste a URL, or a claim about one, then choose Quick Check for a fast answer or Deep Investigation for a more thorough one.",
-    placeholder: "Paste a URL, link, or claim…",
-  },
-};
-
 function ClaimForm() {
   const router = useRouter();
   const supabase = createClient();
   const searchParams = useSearchParams();
+  const { t } = useLanguage();
   const type: "text" | "url" = searchParams.get("type") === "url" ? "url" : "text";
-  const copy = COPY[type];
   const backHref = `/verify/claim?type=${type}`;
+
+  const copy =
+    type === "url"
+      ? {
+          eyebrow: t("claim.urlEyebrow"),
+          heading: t("claim.urlHeading"),
+          sub: t("claim.urlSub"),
+          placeholder: t("claim.urlPlaceholder"),
+        }
+      : {
+          eyebrow: t("claim.textEyebrow"),
+          heading: t("claim.textHeading"),
+          sub: t("claim.textSub"),
+          placeholder: t("claim.textPlaceholder"),
+        };
 
   const [claim, setClaim] = useState("");
   const [submitting, setSubmitting] = useState<"quick" | "deep" | null>(null);
@@ -94,9 +94,9 @@ function ClaimForm() {
     <main className="shell narrow">
       <nav>
         <button className="back" onClick={() => router.push("/")}>
-          ← Back
+          {t("nav.back")}
         </button>
-        <div className="credits">Credits</div>
+        <div className="credits">{t("nav.credits")}</div>
       </nav>
       <section className="verify">
         <p className="eyebrow">{copy.eyebrow}</p>
@@ -117,24 +117,24 @@ function ClaimForm() {
             onClick={() => submit("deep")}
             disabled={!!submitting || claim.trim().length < 5}
           >
-            {submitting === "deep" ? "Investigating…" : "Deep Investigation"}
+            {submitting === "deep" ? t("claim.investigating") : t("claim.deepInvestigation")}
           </button>
           <button onClick={() => submit("quick")} disabled={!!submitting || claim.trim().length < 5}>
-            {submitting === "quick" ? "Checking…" : "Quick Check"}
+            {submitting === "quick" ? t("claim.checking") : t("claim.quickCheck")}
           </button>
         </div>
         {error && <p className="error">{error}</p>}
         <p className="hint">
-          Have a QR code instead? <Link href="/verify/qr">Scan it</Link>
+          {t("claim.hintQrText")} <Link href="/verify/qr">{t("claim.hintQrLink")}</Link>
         </p>
         <p className="hint">
-          Got a photo? <Link href="/verify/image">Check it</Link>
+          {t("claim.hintPhotoText")} <Link href="/verify/image">{t("claim.hintPhotoLink")}</Link>
         </p>
         <p className="hint">
-          Got audio? <Link href="/verify/audio">Check it</Link>
+          {t("claim.hintAudioText")} <Link href="/verify/audio">{t("claim.hintAudioLink")}</Link>
         </p>
         <p className="hint">
-          Got a video? <Link href="/verify/video">Check it</Link>
+          {t("claim.hintVideoText")} <Link href="/verify/video">{t("claim.hintVideoLink")}</Link>
         </p>
       </section>
     </main>

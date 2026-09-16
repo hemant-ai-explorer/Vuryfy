@@ -13,6 +13,7 @@ import {
 } from "@/lib/verification-cache";
 import { detectPaymentReceipt } from "@/lib/detect-payment-receipt";
 import { detectPaymentRequest } from "@/lib/detect-payment-request";
+import { getUserLanguage } from "@/lib/user-language";
 
 // Route-level execution budget (Sept 2026 fix, added across every AI-
 // calling route after the video-upload 413 investigation surfaced that
@@ -134,8 +135,13 @@ export async function POST(request: Request) {
     });
   }
 
+  // Output localization (Phase 1 of the multilingual rollout) — see
+  // app/api/verify/route.ts's identical comment for the full rationale.
+  const language = await getUserLanguage(admin, user.id);
+  const cacheNamespace = language === "en" ? inputType : `${inputType}:${language}`;
+
   const normalizedClaim = normalizeClaim(claim);
-  const cacheKey = computeCacheKey(normalizedClaim, inputType, DEEP_ENGINE_VERSION);
+  const cacheKey = computeCacheKey(normalizedClaim, cacheNamespace, DEEP_ENGINE_VERSION);
 
   // Atomic conditional decrement, same pattern as decrement_quick_check()
   // (see supabase/migrations/0003_deep_investigation.sql) — only succeeds
@@ -169,7 +175,7 @@ export async function POST(request: Request) {
   let semanticMatch: CachedVerification | null = null;
 
   if (!cached) {
-    const semantic = await checkSemanticCache(admin, normalizedClaim, inputType, DEEP_ENGINE_VERSION);
+    const semantic = await checkSemanticCache(admin, normalizedClaim, cacheNamespace, DEEP_ENGINE_VERSION);
     semanticEmbedding = semantic.embedding;
     semanticMatch = semantic.match;
     if (semanticMatch) {
@@ -185,7 +191,7 @@ export async function POST(request: Request) {
     result = semanticMatch;
   } else {
     try {
-      result = await runDeepInvestigation(claim);
+      result = await runDeepInvestigation(claim, language);
     } catch (err) {
       console.error("[deep] Deep Investigation pipeline failed (refunding credit):", err);
 
@@ -262,7 +268,7 @@ export async function POST(request: Request) {
   if (!cacheHit) {
     await writeCache(admin, cacheKey, verification.id, claim);
     if (semanticEmbedding) {
-      await writeSemanticCache(admin, semanticEmbedding, inputType, DEEP_ENGINE_VERSION, verification.id, normalizedClaim, claim);
+      await writeSemanticCache(admin, semanticEmbedding, cacheNamespace, DEEP_ENGINE_VERSION, verification.id, normalizedClaim, claim);
     }
   }
 
