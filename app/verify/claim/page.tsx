@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useLanguage } from "@/app/providers/language-provider";
+import { parseJsonResponse } from "@/lib/safe-json";
 
 // Unified text-entry confirm screen — Sept 16, 2026. Replaces the home
 // screen's old mode-first pair ("Start a Quick Check" / "Start a Deep
@@ -79,7 +80,7 @@ function ClaimForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ claim: claim.trim(), input_type: "text" }),
       });
-      const d = await r.json();
+      const d = await parseJsonResponse(r);
       if (!r.ok) throw new Error(d.error || (mode === "quick" ? "Verification failed" : "Investigation failed"));
       sessionStorage.setItem("vuryfy_result", JSON.stringify({ ...d, return_to: backHref }));
       router.push(`/result?id=${d.id}`);

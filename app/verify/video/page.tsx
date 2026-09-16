@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { uploadVideoToStorage, deleteUploadedVideo, type UploadedVideo } from "@/lib/prepare-video-upload";
+import { useLanguage } from "@/app/providers/language-provider";
+import { parseJsonResponse } from "@/lib/safe-json";
 
 // Video input — the last step in the locked media-type build order (text +
 // link -> QR -> image -> audio -> video), shipping after audio per the
@@ -33,6 +35,7 @@ import { uploadVideoToStorage, deleteUploadedVideo, type UploadedVideo } from "@
 export default function VerifyVideoPage() {
   const router = useRouter();
   const supabase = createClient();
+  const { t } = useLanguage();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [uploading, setUploading] = useState(false);
@@ -71,7 +74,7 @@ export default function VerifyVideoPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ storage_path: video.storagePath, mime_type: video.mimeType }),
       });
-      const d = await r.json();
+      const d = await parseJsonResponse(r);
       if (!r.ok) throw new Error(d.error || "Transcription failed");
       if (d.transcript) {
         setTranscript(d.transcript);
@@ -79,7 +82,7 @@ export default function VerifyVideoPage() {
         setNoSpeechFound(true);
       }
     } catch (e: any) {
-      setProcessError(e.message || "Couldn't process that video file. Try a different file.");
+      setProcessError(e.message || t("video.processError"));
     } finally {
       setUploading(false);
       setProcessing(false);
@@ -104,7 +107,7 @@ export default function VerifyVideoPage() {
           context: context.trim(),
         }),
       });
-      const d = await r.json();
+      const d = await parseJsonResponse(r);
       if (!r.ok) throw new Error(d.error || (mode === "quick" ? "Check failed" : "Investigation failed"));
       sessionStorage.setItem("vuryfy_result", JSON.stringify({ ...d, return_to: "/verify/video" }));
       router.push(`/result?id=${d.id}`);
@@ -132,7 +135,7 @@ export default function VerifyVideoPage() {
           context: context.trim(),
         }),
       });
-      const d = await r.json();
+      const d = await parseJsonResponse(r);
       if (!r.ok) throw new Error(d.error || (mode === "quick" ? "Analysis failed" : "Investigation failed"));
       sessionStorage.setItem("vuryfy_result", JSON.stringify({ ...d, return_to: "/verify/video" }));
       router.push(`/result?id=${d.id}`);
@@ -168,19 +171,14 @@ export default function VerifyVideoPage() {
     <main className="shell narrow">
       <nav>
         <button className="back" onClick={() => router.push("/")}>
-          ← Back
+          {t("nav.back")}
         </button>
-        <div className="credits">Credits</div>
+        <div className="credits">{t("nav.credits")}</div>
       </nav>
       <section className="verify">
-        <p className="eyebrow">VIDEO</p>
-        <h1>Check a video.</h1>
-        <p className="sub">
-          Upload a video clip — up to 250MB, so several minutes of typical phone video. If we can
-          make out speech, we&apos;ll transcribe it so you can check what&apos;s said, and
-          we&apos;ll also watch the video itself for signs of deepfakes, face-swaps, or
-          AI-generated footage — both from the same check.
-        </p>
+        <p className="eyebrow">{t("video.eyebrow")}</p>
+        <h1>{t("video.heading")}</h1>
+        <p className="sub">{t("video.sub")}</p>
 
         {!hasVideo && (
           <>
@@ -196,47 +194,41 @@ export default function VerifyVideoPage() {
               }}
             />
             <label htmlFor="video-file" className="primary-link">
-              {uploading ? "Uploading…" : processing ? "Processing…" : "Choose a video"}
+              {uploading ? t("status.uploading") : processing ? t("status.processing") : t("video.chooseVideo")}
             </label>
             {processError && <p className="error">{processError}</p>}
             <p className="hint">
-              Got audio instead? <Link href="/verify/audio">Check it</Link>
+              {t("video.hintAudioText")} <Link href="/verify/audio">{t("hint.checkIt")}</Link>
             </p>
             <p className="hint">
-              Got a photo? <Link href="/verify/image">Check it</Link>
+              {t("video.hintPhotoText")} <Link href="/verify/image">{t("hint.checkIt")}</Link>
             </p>
           </>
         )}
 
-        {hasVideo && uploading && <p className="hint">Uploading…</p>}
-        {hasVideo && processing && <p className="hint">Transcribing…</p>}
+        {hasVideo && uploading && <p className="hint">{t("status.uploading")}</p>}
+        {hasVideo && processing && <p className="hint">{t("status.transcribing")}</p>}
 
         {hasVideo && !processing && transcript && (
           <div className="qr-decoded">
-            <span>TRANSCRIPT (EDIT IF NEEDED)</span>
+            <span>{t("transcript.badge")}</span>
             <textarea
               className="context-textarea"
               value={transcript}
               onChange={(e) => setTranscript(e.target.value)}
               maxLength={10000}
             />
-            <p className="hint">
-              We&apos;ll also watch the video itself for signs of deepfakes, face-swaps, or AI-generated
-              footage.
-            </p>
-            <p className="hint">
-              Quick Check gives a fast answer on both what&apos;s said and the video itself. Deep
-              Investigation researches more thoroughly and takes longer.
-            </p>
+            <p className="hint">{t("video.transcriptHint")}</p>
+            <p className="hint">{t("video.combinedHint")}</p>
             <div className="result-actions">
               <button className="secondary" onClick={reset} disabled={anySubmitting}>
-                Choose another
+                {t("action.chooseAnother")}
               </button>
               <button className="secondary" onClick={() => submitCombined("deep")} disabled={anySubmitting}>
-                {submitting === "combined-deep" ? "Investigating…" : "Deep Investigation"}
+                {submitting === "combined-deep" ? t("claim.investigating") : t("claim.deepInvestigation")}
               </button>
               <button onClick={() => submitCombined("quick")} disabled={anySubmitting}>
-                {submitting === "combined-quick" ? "Checking…" : "Quick Check"}
+                {submitting === "combined-quick" ? t("claim.checking") : t("claim.quickCheck")}
               </button>
             </div>
             {submitError && <p className="error">{submitError}</p>}
@@ -245,32 +237,25 @@ export default function VerifyVideoPage() {
 
         {hasVideo && !processing && noSpeechFound && (
           <div className="qr-decoded">
-            <span>NO SPEECH FOUND</span>
-            <p>
-              We couldn&apos;t make out any spoken words in this video — only the authenticity check
-              below is available for it.
-            </p>
-            <p className="hint">
-              We&apos;ll watch for signs of deepfakes, face-swaps, or AI-generated footage — not a
-              source-verified fact-check, just a watch-through. Optionally tell us what this video is
-              supposed to show, and we&apos;ll note whether that sounds consistent.
-            </p>
+            <span>{t("noSpeech.badge")}</span>
+            <p>{t("video.noSpeechBody")}</p>
+            <p className="hint">{t("video.noSpeechHint")}</p>
             <textarea
               className="context-textarea"
               value={context}
               onChange={(e) => setContext(e.target.value)}
-              placeholder="What is this video supposed to show? (optional)"
+              placeholder={t("video.contextPlaceholder")}
               maxLength={500}
             />
             <div className="result-actions">
               <button className="secondary" onClick={reset} disabled={anySubmitting}>
-                Choose another
+                {t("action.chooseAnother")}
               </button>
               <button className="secondary" onClick={() => submitVideo("deep")} disabled={anySubmitting}>
-                {submitting === "video-deep" ? "Investigating…" : "Deep Investigation"}
+                {submitting === "video-deep" ? t("claim.investigating") : t("claim.deepInvestigation")}
               </button>
               <button onClick={() => submitVideo("quick")} disabled={anySubmitting}>
-                {submitting === "video-quick" ? "Checking…" : "Quick Check"}
+                {submitting === "video-quick" ? t("claim.checking") : t("claim.quickCheck")}
               </button>
             </div>
             {submitError && <p className="error">{submitError}</p>}

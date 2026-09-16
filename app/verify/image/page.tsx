@@ -5,6 +5,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { extractTextFromImage } from "@/lib/decode-image-text";
 import { prepareImageForUpload, type PreparedImage } from "@/lib/prepare-image-upload";
+import { useLanguage } from "@/app/providers/language-provider";
+import { parseJsonResponse } from "@/lib/safe-json";
 
 // Image input — the next step in the locked media-type build order (text +
 // link -> QR -> image -> audio/video). Offers up to two independent
@@ -48,6 +50,7 @@ import { prepareImageForUpload, type PreparedImage } from "@/lib/prepare-image-u
 export default function VerifyImagePage() {
   const router = useRouter();
   const supabase = createClient();
+  const { t } = useLanguage();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [processing, setProcessing] = useState(false);
@@ -77,7 +80,7 @@ export default function VerifyImagePage() {
       setOcrText(text || null);
       setPrepared(image);
     } catch {
-      setProcessError("Couldn't read that image. Try a different photo.");
+      setProcessError(t("qr.decodeErrorGeneric"));
     } finally {
       setProcessing(false);
     }
@@ -99,7 +102,7 @@ export default function VerifyImagePage() {
           context: context.trim(),
         }),
       });
-      const d = await r.json();
+      const d = await parseJsonResponse(r);
       if (!r.ok) throw new Error(d.error || (mode === "quick" ? "Verification failed" : "Investigation failed"));
       sessionStorage.setItem("vuryfy_result", JSON.stringify({ ...d, return_to: "/verify/image" }));
       router.push(`/result?id=${d.id}`);
@@ -125,7 +128,7 @@ export default function VerifyImagePage() {
           context: context.trim(),
         }),
       });
-      const d = await r.json();
+      const d = await parseJsonResponse(r);
       if (!r.ok) throw new Error(d.error || (mode === "quick" ? "Analysis failed" : "Investigation failed"));
       sessionStorage.setItem("vuryfy_result", JSON.stringify({ ...d, return_to: "/verify/image" }));
       router.push(`/result?id=${d.id}`);
@@ -154,17 +157,14 @@ export default function VerifyImagePage() {
     <main className="shell narrow">
       <nav>
         <button className="back" onClick={() => router.push("/")}>
-          ← Back
+          {t("nav.back")}
         </button>
-        <div className="credits">Credits</div>
+        <div className="credits">{t("nav.credits")}</div>
       </nav>
       <section className="verify">
-        <p className="eyebrow">IMAGE</p>
-        <h1>Check a photo.</h1>
-        <p className="sub">
-          Upload a photo. If it has readable text, we&apos;ll offer to check that. Either way, you
-          can also have us look at the photo itself for signs of editing or AI generation.
-        </p>
+        <p className="eyebrow">{t("image.eyebrow")}</p>
+        <h1>{t("image.heading")}</h1>
+        <p className="sub">{t("image.sub")}</p>
 
         {!hasImage && (
           <>
@@ -181,63 +181,56 @@ export default function VerifyImagePage() {
               }}
             />
             <label htmlFor="image-file" className="primary-link">
-              {processing ? "Reading…" : "Choose or take a photo"}
+              {processing ? t("status.reading") : t("qr.choosePhoto")}
             </label>
             {processError && <p className="error">{processError}</p>}
             <p className="hint">
-              Have a QR code instead? <Link href="/verify/qr">Scan it</Link>
+              {t("image.hintQrText")} <Link href="/verify/qr">{t("image.hintQrLink")}</Link>
             </p>
             <p className="hint">
-              Got audio? <Link href="/verify/audio">Check it</Link>
+              {t("qr.hintAudioText")} <Link href="/verify/audio">{t("hint.checkIt")}</Link>
             </p>
             <p className="hint">
-              Got a video? <Link href="/verify/video">Check it</Link>
+              {t("qr.hintVideoText")} <Link href="/verify/video">{t("hint.checkIt")}</Link>
             </p>
           </>
         )}
 
         {hasImage && ocrText && (
           <div className="qr-decoded">
-            <span>WE FOUND TEXT IN THIS IMAGE</span>
+            <span>{t("image.ocrFoundBadge")}</span>
             <p>{ocrText}</p>
-            <p className="hint">
-              We&apos;ll also look at the photo itself for signs of editing or AI generation —
-              both checks run from the buttons below.
-            </p>
+            <p className="hint">{t("image.ocrFoundHint")}</p>
           </div>
         )}
 
         {hasImage && (
           <div className="qr-decoded">
-            {!ocrText && <span>ANALYZE THE PHOTO ITSELF</span>}
-            <p className="hint">
-              {ocrText
-                ? "Quick Check gives a fast answer for both. Deep Investigation researches more thoroughly and takes longer."
-                : "We'll look at the image for signs of editing or AI generation — not a source-verified fact-check, just a visual read. Optionally tell us what this photo is supposed to show, and we'll note whether that looks visually consistent."}
-            </p>
+            {!ocrText && <span>{t("image.analyzeBadge")}</span>}
+            <p className="hint">{ocrText ? t("image.hintCombined") : t("image.hintVisionOnly")}</p>
             <textarea
               className="context-textarea"
               value={context}
               onChange={(e) => setContext(e.target.value)}
-              placeholder="What is this photo supposed to show? (optional)"
+              placeholder={t("image.contextPlaceholder")}
               maxLength={500}
             />
             <div className="result-actions">
               <button className="secondary" onClick={reset} disabled={anySubmitting}>
-                Choose another
+                {t("action.chooseAnother")}
               </button>
               <button
                 className="secondary"
                 onClick={() => (ocrText ? submitCombined("deep") : submitVision("deep"))}
                 disabled={anySubmitting}
               >
-                {isDeepCombined ? "Investigating…" : "Deep Investigation"}
+                {isDeepCombined ? t("claim.investigating") : t("claim.deepInvestigation")}
               </button>
               <button
                 onClick={() => (ocrText ? submitCombined("quick") : submitVision("quick"))}
                 disabled={anySubmitting}
               >
-                {isCheckingCombined ? "Checking…" : "Quick Check"}
+                {isCheckingCombined ? t("claim.checking") : t("claim.quickCheck")}
               </button>
             </div>
             {submitError && <p className="error">{submitError}</p>}

@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { decodeQrFromFile } from "@/lib/decode-qr";
 import { detectPaymentLink, type PaymentLinkInfo } from "@/lib/detect-payment-link";
+import { useLanguage } from "@/app/providers/language-provider";
+import { parseJsonResponse } from "@/lib/safe-json";
 
 // QR Quick Check — the next step in the locked media-type build order
 // (text + link, then QR, then image, then audio/video). The QR image is
@@ -63,6 +65,7 @@ type PayeeSimilarMatch = { payeeName: string; upiId: string; similarity: number;
 export default function VerifyQrPage() {
   const router = useRouter();
   const supabase = createClient();
+  const { t } = useLanguage();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [decoding, setDecoding] = useState(false);
   const [decoded, setDecoded] = useState<string | null>(null);
@@ -90,9 +93,7 @@ export default function VerifyQrPage() {
     try {
       const result = await decodeQrFromFile(file);
       if (!result) {
-        setDecodeError(
-          "Couldn't find a QR code in that image. Try a clearer, well-lit photo where the code fills more of the frame."
-        );
+        setDecodeError(t("qr.decodeErrorNotFound"));
         return;
       }
       const payment = detectPaymentLink(result);
@@ -105,7 +106,7 @@ export default function VerifyQrPage() {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ upi_id: payment.payeeId, payee_name: payment.payeeName ?? "" }),
             });
-            const d = await r.json();
+            const d = await parseJsonResponse(r);
             if (r.ok && d.similarMatch) {
               setPayeeWarning(d.similarMatch);
             }
@@ -118,7 +119,7 @@ export default function VerifyQrPage() {
         setDecoded(result);
       }
     } catch {
-      setDecodeError("Couldn't read that image. Try a different photo.");
+      setDecodeError(t("qr.decodeErrorGeneric"));
     } finally {
       setDecoding(false);
     }
@@ -135,7 +136,7 @@ export default function VerifyQrPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ claim: decoded, input_type: "qr" }),
       });
-      const d = await r.json();
+      const d = await parseJsonResponse(r);
       if (!r.ok) throw new Error(d.error || (mode === "quick" ? "Verification failed" : "Investigation failed"));
       sessionStorage.setItem("vuryfy_result", JSON.stringify(d));
       router.push(`/result?id=${d.id}`);
@@ -157,7 +158,7 @@ export default function VerifyQrPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ payee_name: paymentInfo.payeeName ?? "", upi_id: paymentInfo.payeeId }),
       });
-      const d = await r.json();
+      const d = await parseJsonResponse(r);
       if (!r.ok) throw new Error(d.error || (mode === "quick" ? "Investigation failed" : "Investigation failed"));
       sessionStorage.setItem("vuryfy_result", JSON.stringify({ ...d, return_to: "/verify/qr" }));
       router.push(`/result?id=${d.id}`);
@@ -182,18 +183,14 @@ export default function VerifyQrPage() {
     <main className="shell narrow">
       <nav>
         <button className="back" onClick={() => router.push("/")}>
-          ← Back
+          {t("nav.back")}
         </button>
-        <div className="credits">Credits</div>
+        <div className="credits">{t("nav.credits")}</div>
       </nav>
       <section className="verify">
-        <p className="eyebrow">QR CODE</p>
-        <h1>Scan a QR code.</h1>
-        <p className="sub">
-          Upload a photo of a QR code and choose Quick Check or Deep Investigation for what it
-          points to. Only the text inside the code is sent to us — the photo itself never leaves
-          your device.
-        </p>
+        <p className="eyebrow">{t("qr.eyebrow")}</p>
+        <h1>{t("qr.heading")}</h1>
+        <p className="sub">{t("qr.sub")}</p>
 
         {!decoded && !paymentInfo && (
           <>
@@ -210,64 +207,52 @@ export default function VerifyQrPage() {
               }}
             />
             <label htmlFor="qr-file" className="primary-link">
-              {decoding ? "Reading…" : "Choose or take a photo"}
+              {decoding ? t("status.reading") : t("qr.choosePhoto")}
             </label>
             {decodeError && <p className="error">{decodeError}</p>}
             <p className="hint">
-              Got a regular photo instead of a QR code? <Link href="/verify/image">Check it</Link>
+              {t("qr.hintPhotoText")} <Link href="/verify/image">{t("hint.checkIt")}</Link>
             </p>
             <p className="hint">
-              Got audio? <Link href="/verify/audio">Check it</Link>
+              {t("qr.hintAudioText")} <Link href="/verify/audio">{t("hint.checkIt")}</Link>
             </p>
             <p className="hint">
-              Got a video? <Link href="/verify/video">Check it</Link>
+              {t("qr.hintVideoText")} <Link href="/verify/video">{t("hint.checkIt")}</Link>
             </p>
           </>
         )}
 
         {paymentInfo && (
           <div className="qr-payment">
-            <span>THIS IS A PAYMENT QR CODE</span>
-            <h3>{paymentInfo.payeeName || "Unnamed payee"}</h3>
+            <span>{t("qr.paymentBadge")}</span>
+            <h3>{paymentInfo.payeeName || t("payee.unnamed")}</h3>
             {paymentInfo.payeeId && <p className="payee-id">{paymentInfo.payeeId}</p>}
             {payeeWarning && (
               <div className="scam-warning">
-                <span>⚠ SIMILAR NAME, DIFFERENT PAYMENT ID</span>
+                <span>{t("qr.similarNameWarning")}</span>
                 <p className="caution">
-                  This name is very close to <strong>{payeeWarning.payeeName}</strong> (ID:{" "}
-                  {payeeWarning.upiId}), which you&apos;ve scanned before in Vuryfy — but this QR
-                  code uses a different payment ID. This is a common impersonation pattern.
-                  Vuryfy can&apos;t tell you which of the two is the real one — verify directly
-                  with who you intend to pay before proceeding.
+                  {t("qr.similarNameCaution")
+                    .replace("{name}", payeeWarning.payeeName)
+                    .replace("{id}", payeeWarning.upiId)}
                 </p>
               </div>
             )}
-            <p className="caution">
-              Vuryfy can&apos;t verify who actually controls a payment ID from a QR code alone —
-              that isn&apos;t something a web search can confirm. Before paying, make sure the
-              name above matches who you intend to pay, and confirm directly with them if
-              you&apos;re unsure.
-            </p>
+            <p className="caution">{t("qr.paymentCaution")}</p>
 
             {paymentInfo.kind === "upi" && paymentInfo.payeeId && (
               <div className="qr-decoded" style={{ marginTop: 20 }}>
-                <span>INVESTIGATE THIS PAYEE</span>
-                <p className="hint">
-                  This searches the public web for the payee&apos;s name and ID — scam reports,
-                  complaints, or a legitimate business presence. It still can&apos;t confirm this
-                  transaction or who controls the ID; it can only tell you what&apos;s publicly
-                  findable, which may be nothing either way.
-                </p>
+                <span>{t("payee.investigateEyebrow")}</span>
+                <p className="hint">{t("qr.investigateHint")}</p>
                 <div className="result-actions">
                   <button
                     className="secondary"
                     onClick={() => investigatePayee("deep")}
                     disabled={!!payeeChecking}
                   >
-                    {payeeChecking === "deep" ? "Investigating…" : "Deep Investigation"}
+                    {payeeChecking === "deep" ? t("claim.investigating") : t("claim.deepInvestigation")}
                   </button>
                   <button onClick={() => investigatePayee("quick")} disabled={!!payeeChecking}>
-                    {payeeChecking === "quick" ? "Checking…" : "Quick Check"}
+                    {payeeChecking === "quick" ? t("claim.checking") : t("claim.quickCheck")}
                   </button>
                 </div>
                 {payeeCheckError && <p className="error">{payeeCheckError}</p>}
@@ -276,7 +261,7 @@ export default function VerifyQrPage() {
 
             <div className="result-actions">
               <button className="secondary" onClick={reset}>
-                Scan another
+                {t("qr.scanAnother")}
               </button>
             </div>
           </div>
@@ -284,21 +269,18 @@ export default function VerifyQrPage() {
 
         {decoded && (
           <div className="qr-decoded">
-            <span>WE FOUND THIS IN YOUR QR CODE</span>
+            <span>{t("qr.decodedBadge")}</span>
             <p>{decoded}</p>
-            <p className="hint">
-              Quick Check gives a fast answer. Deep Investigation researches it more thoroughly
-              and takes longer.
-            </p>
+            <p className="hint">{t("qr.decodedHint")}</p>
             <div className="result-actions">
               <button className="secondary" onClick={reset} disabled={!!submitting}>
-                Scan another
+                {t("qr.scanAnother")}
               </button>
               <button className="secondary" onClick={() => confirm("deep")} disabled={!!submitting}>
-                {submitting === "deep" ? "Investigating…" : "Deep Investigation"}
+                {submitting === "deep" ? t("claim.investigating") : t("claim.deepInvestigation")}
               </button>
               <button onClick={() => confirm("quick")} disabled={!!submitting}>
-                {submitting === "quick" ? "Checking…" : "Quick Check"}
+                {submitting === "quick" ? t("claim.checking") : t("claim.quickCheck")}
               </button>
             </div>
             {submitError && <p className="error">{submitError}</p>}

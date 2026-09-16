@@ -38,28 +38,60 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const [hasPreference, setHasPreference] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Retries transient failures before settling into the English fail-open
+  // — added Sept 16, 2026. Confirmed live (via a direct hit to a fresh
+  // `npm run dev` process) that /api/preferences can come back non-OK for
+  // reasons that have nothing to do with the user's actual sign-in state —
+  // a dev-server cold-start hiccup while routes are still compiling, or a
+  // dropped connection right after a restart. Previously ANY single
+  // failure — even one totally unrelated to auth — permanently set
+  // hasPreference=false and left `language` stuck at "en" for the rest of
+  // that tab's life, since refresh() only ever runs once (the effect below
+  // has no polling/retry of its own) and a stored "hi" preference doesn't
+  // get a second chance until a full page reload. A real 401 ("Not signed
+  // in") is a clean, well-defined answer from this route and is NOT
+  // retried — only network errors and non-401 non-OK statuses (5xx, or a
+  // transient proxy/dev-server error) get a couple of quick retries first.
   const refresh = useCallback(async () => {
     setLoading(true);
-    try {
-      const res = await fetch("/api/preferences");
-      if (res.ok) {
-        const data = await res.json();
-        if (isSupportedLanguage(data.language)) {
-          setLanguageState(data.language);
-          setHasPreference(true);
-        } else {
-          setHasPreference(false);
+    const maxAttempts = 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const res = await fetch("/api/preferences");
+        if (res.ok) {
+          const data = await res.json();
+          if (isSupportedLanguage(data.language)) {
+            setLanguageState(data.language);
+            setHasPreference(true);
+          } else {
+            setHasPreference(false);
+          }
+          setLoading(false);
+          return;
         }
-      } else {
-        // Not signed in, or the lookup failed — fail open to English and
-        // treat as "no preference yet" rather than blocking the page.
-        setHasPreference(false);
+        if (res.status === 401) {
+          // Genuinely not signed in — no point retrying that.
+          setHasPreference(false);
+          setLoading(false);
+          return;
+        }
+        console.error(
+          `[language-provider] /api/preferences returned ${res.status} (attempt ${attempt}/${maxAttempts})`
+        );
+      } catch (err) {
+        console.error(
+          `[language-provider] /api/preferences fetch failed (attempt ${attempt}/${maxAttempts}):`,
+          err
+        );
       }
-    } catch {
-      setHasPreference(false);
-    } finally {
-      setLoading(false);
+      if (attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
+      }
     }
+    // Every attempt failed for a non-401 reason — fail open to English
+    // rather than blocking the page, same as before.
+    setHasPreference(false);
+    setLoading(false);
   }, []);
 
   useEffect(() => {

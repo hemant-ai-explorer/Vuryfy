@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { runVideoQuickCheck, VIDEO_QUICK_ENGINE_VERSION, type VideoAnalysisResult } from "@/lib/video-analysis";
 import { normalizeClaim } from "@/lib/quick-check";
 import { getUserLanguage } from "@/lib/user-language";
+import { withRetryOnce } from "@/lib/db-retry";
 import {
   downloadVideoFromStorage,
   uploadDownloadedVideoToGemini,
@@ -178,25 +179,29 @@ export async function POST(request: Request) {
 
   const claimText = context || "[Video submitted for authenticity analysis]";
 
-  const { data: verification, error: insertError } = await admin
-    .from("verifications")
-    .insert({
-      user_id: user.id,
-      mode: "quick",
-      input_type: "video",
-      claim_text: claimText,
-      normalized_claim: normalizeClaim(claimText),
-      verdict: result.verdict,
-      confidence: result.confidence,
-      summary: result.summary,
-      key_evidence: result.key_evidence,
-      sources: result.sources,
-      caveats: result.caveats,
-      engine_version: result.engine_version,
-      credit_charged: true,
-    })
-    .select()
-    .single();
+  const { data: verification, error: insertError } = await withRetryOnce(
+    (client) =>
+      client
+        .from("verifications")
+        .insert({
+          user_id: user.id,
+          mode: "quick",
+          input_type: "video",
+          claim_text: claimText,
+          normalized_claim: normalizeClaim(claimText),
+          verdict: result.verdict,
+          confidence: result.confidence,
+          summary: result.summary,
+          key_evidence: result.key_evidence,
+          sources: result.sources,
+          caveats: result.caveats,
+          engine_version: result.engine_version,
+          credit_charged: true,
+        })
+        .select()
+        .single(),
+    admin
+  );
 
   if (insertError || !verification) {
     console.error("[verify-video] verifications insert failed:", insertError);

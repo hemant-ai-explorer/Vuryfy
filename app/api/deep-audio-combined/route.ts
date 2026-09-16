@@ -5,6 +5,7 @@ import { runDeepInvestigation, DEEP_ENGINE_VERSION, type DeepInvestigationResult
 import { normalizeClaim } from "@/lib/quick-check";
 import { runAudioDeepInvestigation, AUDIO_DEEP_ENGINE_VERSION, type AudioAnalysisResult } from "@/lib/audio-analysis";
 import { getUserLanguage } from "@/lib/user-language";
+import { translate } from "@/lib/translations";
 import {
   computeCacheKey,
   getCachedVerification,
@@ -276,7 +277,7 @@ export async function POST(request: Request) {
     secondary: audioRow
       ? {
           id: audioRow.id,
-          eyebrow: "THE RECORDING ITSELF",
+          eyebrow: translate(language, "result.eyebrowRecording"),
           verdict: audioRow.verdict,
           confidence: audioRow.confidence,
           explanation: audioRow.summary,

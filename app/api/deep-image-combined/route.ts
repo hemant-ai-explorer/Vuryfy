@@ -7,6 +7,7 @@ import { runImageDeepInvestigation, type ImageAnalysisResult } from "@/lib/image
 import { computeCacheKey, getCachedVerification, writeCache, type CachedVerification } from "@/lib/verification-cache";
 import { detectPaymentReceipt } from "@/lib/detect-payment-receipt";
 import { getUserLanguage } from "@/lib/user-language";
+import { translate } from "@/lib/translations";
 
 // Route-level execution budget (Sept 2026 fix — see app/api/deep/route.ts's
 // comment for the full rationale). This route runs two AI pipelines in
@@ -242,7 +243,7 @@ export async function POST(request: Request) {
     secondary: imageRow
       ? {
           id: imageRow.id,
-          eyebrow: "THE PHOTO ITSELF",
+          eyebrow: translate(language, "result.eyebrowPhoto"),
           verdict: imageRow.verdict,
           confidence: imageRow.confidence,
           explanation: imageRow.summary,
