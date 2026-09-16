@@ -84,31 +84,29 @@ export default function Home() {
             Verify URL/Claims
           </Link>
           <Link className="secondary-link" href="/verify/qr">
-            Scan a QR Code
+            Verify a QR Code
           </Link>
           <Link className="secondary-link" href="/verify/image">
-            Check a Photo
+            Verify a Photo/Image
           </Link>
           <Link className="secondary-link" href="/verify/audio">
-            Check Audio
+            Verify Audio
           </Link>
           <Link className="secondary-link" href="/verify/video">
-            Check a Video
+            Verify a Video
           </Link>
         </div>
         <div className="balance-card">
           <div>
-            <span>Quick</span>
+            <span>Quick Checks</span>
             <strong>{credits?.quick_checks ?? "—"}</strong>
           </div>
           <div>
-            <span>Deep</span>
+            <span>Deep Investigations</span>
             <strong>{credits?.deep_investigations ?? "—"}</strong>
           </div>
         </div>
         <div className="home-links">
-          <Link href="/saved">Saved</Link>
-          <Link href="/billing">Credits & Subscription</Link>
           <button className="text-button" onClick={logout}>
             Sign out
           </button>
@@ -119,10 +117,7 @@ export default function Home() {
           </p>
         )}
         {!subscription && (
-          <p className="hint">
-            You don&apos;t have an active plan yet — choose one from Credits &amp; Subscription to
-            get Quick Check and Deep Investigation credits.
-          </p>
+          <p className="hint">You don&apos;t have an active plan yet.</p>
         )}
       </section>
     </main>
