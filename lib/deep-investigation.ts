@@ -170,6 +170,7 @@ export async function runDeepInvestigation(
       systemPrompt: DECOMPOSE_SYSTEM_PROMPT,
       userPrompt: `Claim to investigate:\n"${claim}"`,
       responseSchema: DECOMPOSE_SCHEMA,
+      callSite: "deep-investigation.decompose",
     });
     const cleaned = Array.isArray(data.sub_questions)
       ? data.sub_questions.filter((q) => typeof q === "string" && q.trim().length > 0).slice(0, MAX_SUB_QUESTIONS)
@@ -185,7 +186,7 @@ export async function runDeepInvestigation(
   // contributes no evidence rather than failing the whole investigation.
   const perQuestionResults = await Promise.all(
     subQuestions.map((q) =>
-      search(q, { maxResults: 5 }).catch((err) => {
+      search(q, "deep-investigation.search", { maxResults: 5 }).catch((err) => {
         console.error("[deep-investigation] search failed for sub-question:", q, err);
         return [] as SearchResult[];
       })
@@ -230,6 +231,7 @@ export async function runDeepInvestigation(
     userPrompt,
     responseSchema: SYNTHESIS_SCHEMA,
     fallbackModels: SYNTHESIS_FALLBACK_MODELS,
+    callSite: "deep-investigation.synthesis",
   });
 
   // Code-enforced grounding (Part 19): only trust cited ids that actually

@@ -1,3 +1,6 @@
+import { createAdminClient } from "@/lib/supabase/admin";
+import { estimateGeminiCostUsd } from "@/lib/cost-pricing";
+
 // AI Gateway (Part 11, LOCKED) — the only place in the app that talks to an
 // AI model provider directly. App code requests a MODEL_TIER ('cheap' |
 // 'reasoning'), never a specific model ID, so swapping/upgrading the
@@ -5,9 +8,23 @@
 //
 // V1 "build thin, not full" (Part 11, refinement #3): only one model wired
 // up for both tiers by default — no health-check/auto-downgrade logic, no
-// fallback PROVIDER (still just Gemini). Per-call cost logging (Part 19) is
-// captured in the returned `usage` field but not yet persisted anywhere;
-// wire that up when real cost-tracking work starts.
+// fallback PROVIDER (still just Gemini).
+//
+// Per-call cost logging (Part 19, LOCKED — wired up Sept 16, 2026, see
+// architecture-decisions.md's cost-tracking entry): every call this
+// function makes now writes a fire-and-forget row to api_cost_logs (see
+// supabase/migrations/0012_api_cost_logs.sql) via logCost() below, using
+// the same `usage` field this file already parsed out of Gemini's
+// usageMetadata and the pricing constants in lib/cost-pricing.ts. Callers
+// now pass a required `callSite` label (e.g. "quick-check.verdict") so
+// cost can be grouped by pipeline stage. This is the one new architectural
+// coupling this file takes on — previously a stateless gateway with no DB
+// dependency, it now also writes its own telemetry via
+// lib/supabase/admin.ts's service-role client. That write is best-effort
+// and never allowed to affect the actual call's success/failure or
+// latency in any meaningful way (see logCost's own comment) — same
+// fail-open principle as every other non-critical side effect in this
+// codebase (lib/embeddings.ts, lib/web-detection.ts).
 //
 // Multi-model fallback within Gemini (added Sept 15, 2026): see
 // fallbackModels below — an opt-in per-call list of alternate Gemini model
@@ -149,6 +166,13 @@ export interface StructuredCallParams {
   // opt in (video transcription, video Deep Investigation — the two calls
   // with real, repeated live 503s).
   fallbackModels?: string[];
+  // Sept 16, 2026 addition (cost logging, Part 19): a short, hand-written
+  // label identifying which pipeline stage this call belongs to (e.g.
+  // "quick-check.verdict", "video-analysis.deep") — the aggregation key
+  // for the api_cost_logs rows logCost() below writes. Required on every
+  // call site rather than optional, so a new caller can't silently ship
+  // without cost visibility.
+  callSite: string;
 }
 
 export interface StructuredCallResult<T> {
@@ -324,6 +348,51 @@ async function tryModelWithRetries<T>(
   throw lastErr;
 }
 
+// Sept 16, 2026 — fire-and-forget cost logging (Part 19). Writes exactly
+// one row per callStructured() invocation's final outcome (see the two
+// call sites below: one success path, three ways to exhaust every option
+// and fail). Deliberately does NOT await the insert from its callers —
+// .then()/.catch() only, so a slow or failed cost-log write can never add
+// latency to, or break, the actual verification request. Uses the
+// service-role client directly (lib/supabase/admin.ts) since this is
+// server-only telemetry, never RLS-gated per-user data.
+function logCost(entry: {
+  model: string;
+  tier: ModelTier;
+  callSite: string;
+  promptTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  usedFallback: boolean;
+  status: "success" | "error";
+  errorMessage?: string;
+  inputModality: "text" | "audio";
+}): void {
+  const estimatedCostUsd =
+    entry.status === "success"
+      ? estimateGeminiCostUsd(entry.model, entry.promptTokens, entry.outputTokens, entry.inputModality)
+      : 0;
+
+  createAdminClient()
+    .from("api_cost_logs")
+    .insert({
+      provider: "gemini",
+      model: entry.model,
+      tier: entry.tier,
+      call_site: entry.callSite,
+      prompt_tokens: entry.promptTokens,
+      output_tokens: entry.outputTokens,
+      total_tokens: entry.totalTokens,
+      estimated_cost_usd: estimatedCostUsd,
+      used_fallback: entry.usedFallback,
+      status: entry.status,
+      error_message: entry.errorMessage ?? null,
+    })
+    .then(({ error }) => {
+      if (error) console.error("[ai-gateway] cost log insert failed:", error.message);
+    });
+}
+
 export async function callStructured<T>(params: StructuredCallParams): Promise<StructuredCallResult<T>> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -333,6 +402,13 @@ export async function callStructured<T>(params: StructuredCallParams): Promise<S
   const primaryModel = modelForTier(params.tier);
   const retryDelays = params.retryDelaysMs ?? TRANSIENT_RETRY_DELAYS_MS;
   const fallbackModels = params.fallbackModels ?? [];
+  // Gemini prices raw audio input at a different (higher) per-token rate
+  // than text/image/video input on models that separate it (see
+  // lib/cost-pricing.ts's audioInputPerMillion) — audioParts is the only
+  // signal callStructured() has for "this request's input is audio", so
+  // it's used here rather than adding a redundant param every caller would
+  // have to set by hand.
+  const inputModality: "text" | "audio" = params.audioParts && params.audioParts.length > 0 ? "audio" : "text";
 
   try {
     const result = await tryModelWithRetries<T>(params, apiKey, primaryModel, retryDelays);
@@ -342,9 +418,32 @@ export async function callStructured<T>(params: StructuredCallParams): Promise<S
     // came up debugging why a Quick Check and a Deep Investigation on the
     // same video read as near-identical (see git history same day).
     console.log(`[ai-gateway] served by ${primaryModel} (tier: ${params.tier}, primary)`);
+    logCost({
+      model: primaryModel,
+      tier: params.tier,
+      callSite: params.callSite,
+      promptTokens: result.usage.promptTokens,
+      outputTokens: result.usage.outputTokens,
+      totalTokens: result.usage.totalTokens,
+      usedFallback: false,
+      status: "success",
+      inputModality,
+    });
     return result;
   } catch (primaryErr) {
     if (fallbackModels.length === 0 || !isRetryableTransientError(primaryErr)) {
+      logCost({
+        model: primaryModel,
+        tier: params.tier,
+        callSite: params.callSite,
+        promptTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+        usedFallback: false,
+        status: "error",
+        errorMessage: primaryErr instanceof Error ? primaryErr.message : String(primaryErr),
+        inputModality,
+      });
       throw primaryErr;
     }
     // Sept 15, 2026: the primary model's own retries are exhausted and it's
@@ -358,14 +457,49 @@ export async function callStructured<T>(params: StructuredCallParams): Promise<S
       try {
         const result = await tryModelWithRetries<T>(params, apiKey, model, []);
         console.log(`[ai-gateway] served by ${model} (tier: ${params.tier}, fallback after ${primaryModel} failed)`);
+        logCost({
+          model,
+          tier: params.tier,
+          callSite: params.callSite,
+          promptTokens: result.usage.promptTokens,
+          outputTokens: result.usage.outputTokens,
+          totalTokens: result.usage.totalTokens,
+          usedFallback: true,
+          status: "success",
+          inputModality,
+        });
         return result;
       } catch (err) {
         lastErr = err;
         if (!isRetryableTransientError(err)) {
+          logCost({
+            model,
+            tier: params.tier,
+            callSite: params.callSite,
+            promptTokens: 0,
+            outputTokens: 0,
+            totalTokens: 0,
+            usedFallback: true,
+            status: "error",
+            errorMessage: err instanceof Error ? err.message : String(err),
+            inputModality,
+          });
           throw err;
         }
       }
     }
+    logCost({
+      model: fallbackModels[fallbackModels.length - 1],
+      tier: params.tier,
+      callSite: params.callSite,
+      promptTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      usedFallback: true,
+      status: "error",
+      errorMessage: lastErr instanceof Error ? lastErr.message : String(lastErr),
+      inputModality,
+    });
     throw lastErr;
   }
 }

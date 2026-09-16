@@ -146,7 +146,7 @@ function buildEvidenceBlock(results: SearchResult[]): string {
 export async function runQuickCheck(claimRaw: string, language: Language = "en"): Promise<QuickCheckResult> {
   const claim = normalizeClaim(claimRaw);
 
-  const results = await search(claim, { maxResults: 6 });
+  const results = await search(claim, "quick-check.search", { maxResults: 6 });
   const sources = results.map((r) => ({ title: r.title, url: r.url }));
 
   // Evidence threshold (Part 26.4, LOCKED): don't manufacture a confident
@@ -171,6 +171,7 @@ export async function runQuickCheck(claimRaw: string, language: Language = "en")
     systemPrompt: SYSTEM_PROMPT + languageInstruction(language),
     userPrompt,
     responseSchema: VERDICT_SCHEMA,
+    callSite: "quick-check.verdict",
   });
 
   const citedIds = Array.isArray(data.cited_evidence_ids) ? data.cited_evidence_ids : [];

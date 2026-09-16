@@ -1,3 +1,6 @@
+import { createAdminClient } from "@/lib/supabase/admin";
+import { estimateGeminiCostUsd } from "@/lib/cost-pricing";
+
 // Embeddings — the sole embedding-provider call site (Part 11 lock: never
 // call an AI/embedding provider directly from application code). Backs the
 // Semantic cache layer (see verification-cache.ts's getSemanticCacheMatch/
@@ -17,6 +20,19 @@
 // this constant requires a matching schema migration, not just a code
 // change. Chose 768 over 1536/3072 as the cheapest option that Google's own
 // docs still call a "recommended" size, not a degraded one.
+//
+// Per-call cost logging (Part 19, wired up Sept 16, 2026 alongside the
+// identical addition to lib/ai-gateway.ts and lib/search-gateway.ts — see
+// architecture-decisions.md's cost-tracking entry): unlike generateContent,
+// Gemini's embedContent response carries no usageMetadata/token count, so
+// there's no exact figure to log here the way ai-gateway.ts logs Gemini's
+// own reported token counts. logEmbedCost() below estimates tokens as
+// truncated.length / 4 (a standard, rough chars-per-token approximation for
+// English-ish text) purely for cost-*estimation* purposes — not a
+// billing-accurate count, consistent with this whole feature being
+// estimated unit economics, not invoice reconciliation. Callers now pass a
+// required `callSite` label, same convention as ai-gateway.ts's
+// callStructured() and search-gateway.ts's search().
 const EMBEDDING_MODEL = "gemini-embedding-2";
 const OUTPUT_DIMENSIONALITY = 768;
 export const EMBEDDING_DIMENSIONS = OUTPUT_DIMENSIONALITY;
@@ -25,13 +41,39 @@ interface EmbedContentResponse {
   embedding?: { values?: number[] };
 }
 
+// Fire-and-forget, same convention as ai-gateway.ts's logCost() — never
+// awaited by embedText, never allowed to affect its latency or its
+// fail-open behavior.
+function logEmbedCost(callSite: string, estimatedTokens: number, status: "success" | "error", errorMessage?: string): void {
+  const estimatedCostUsd = status === "success" ? estimateGeminiCostUsd(EMBEDDING_MODEL, estimatedTokens, 0) : 0;
+
+  createAdminClient()
+    .from("api_cost_logs")
+    .insert({
+      provider: "gemini",
+      model: EMBEDDING_MODEL,
+      tier: null,
+      call_site: callSite,
+      prompt_tokens: estimatedTokens,
+      output_tokens: 0,
+      total_tokens: estimatedTokens,
+      estimated_cost_usd: estimatedCostUsd,
+      used_fallback: false,
+      status,
+      error_message: errorMessage ?? null,
+    })
+    .then(({ error }) => {
+      if (error) console.error("[embeddings] cost log insert failed:", error.message);
+    });
+}
+
 // Fails OPEN (returns null on any error), matching the convention already
 // established by verification-cache.ts's getCachedVerification and
 // web-detection.ts's lookupWebDetection: a semantic-cache bug or a Gemini
 // embeddings outage must never be able to break the core verification flow
 // — it just means this request falls through to the real pipeline instead
 // of a cache hit, which is always correct, just not free.
-export async function embedText(text: string): Promise<number[] | null> {
+export async function embedText(text: string, callSite: string): Promise<number[] | null> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     console.error("[embeddings] GEMINI_API_KEY not set");
@@ -42,6 +84,7 @@ export async function embedText(text: string): Promise<number[] | null> {
   // models as of this writing — normalized claims are short, but truncate
   // defensively rather than let an unusually long claim 400 the request.
   const truncated = text.slice(0, 8000);
+  const estimatedTokens = Math.ceil(truncated.length / 4);
 
   try {
     const res = await fetch(
@@ -63,6 +106,7 @@ export async function embedText(text: string): Promise<number[] | null> {
 
     if (!res.ok) {
       console.error(`[embeddings] API error ${res.status}:`, await res.text().catch(() => "<no body>"));
+      logEmbedCost(callSite, estimatedTokens, "error", `API error ${res.status}`);
       return null;
     }
 
@@ -70,11 +114,14 @@ export async function embedText(text: string): Promise<number[] | null> {
     const values = data.embedding?.values;
     if (!values || values.length !== OUTPUT_DIMENSIONALITY) {
       console.error("[embeddings] unexpected response shape:", data);
+      logEmbedCost(callSite, estimatedTokens, "error", "unexpected response shape");
       return null;
     }
+    logEmbedCost(callSite, estimatedTokens, "success");
     return values;
   } catch (err) {
     console.error("[embeddings] request failed:", err);
+    logEmbedCost(callSite, estimatedTokens, "error", err instanceof Error ? err.message : String(err));
     return null;
   }
 }

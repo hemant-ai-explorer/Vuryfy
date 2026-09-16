@@ -55,6 +55,7 @@ export async function transcribeAudio(audioBase64: string, mimeType: string): Pr
     responseSchema: TRANSCRIPT_SCHEMA,
     audioParts: [{ mimeType, data: audioBase64 }],
     timeoutMs: 25_000, // audio can run longer than a still image; still bounded
+    callSite: "audio-transcript.transcribe",
   });
 
   const transcript = typeof data.transcript === "string" ? data.transcript.trim() : "";

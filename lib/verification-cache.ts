@@ -293,7 +293,12 @@ export async function checkSemanticCache(
   inputType: string,
   engineVersion: string
 ): Promise<{ match: CachedVerification | null; embedding: number[] | null }> {
-  const embedding = await embedText(normalizedClaim);
+  // Sept 16, 2026: callSite built from inputType (already passed in by
+  // every caller) rather than adding a new param here — cost-log rows land
+  // as e.g. "semantic-cache:quick_check" / "semantic-cache:deep_investigation",
+  // distinguishing which pipeline paid for the embedding without touching
+  // checkSemanticCache's own callers.
+  const embedding = await embedText(normalizedClaim, `semantic-cache:${inputType}`);
   if (!embedding) return { match: null, embedding: null };
 
   const match = await getSemanticCacheMatch(admin, embedding, inputType, engineVersion);

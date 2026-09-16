@@ -74,6 +74,7 @@ export async function transcribeVideoSpeech(fileUri: string, mimeType: string): 
     timeoutMs: 90_000, // longer clips (now up to several minutes) take longer to process than the old short-clip cap ever needed; still bounded
     retryDelaysMs: VIDEO_TRANSCRIPT_RETRY_DELAYS_MS,
     fallbackModels: VIDEO_TRANSCRIPT_FALLBACK_MODELS,
+    callSite: "video-transcript.transcribe",
   });
 
   const transcript = typeof data.transcript === "string" ? data.transcript.trim() : "";
