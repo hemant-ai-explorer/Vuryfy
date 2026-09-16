@@ -14,6 +14,8 @@ import {
   computeCacheKey,
   getCachedVerification,
   writeCache,
+  checkSemanticCache,
+  writeSemanticCache,
   AUDIO_CACHE_FRESHNESS,
   type CachedVerification,
 } from "@/lib/verification-cache";
@@ -114,6 +116,10 @@ export async function POST(request: Request) {
   let textCacheHit: boolean;
   let videoCacheHit: boolean;
   let textCachedAt: string | null = null;
+  // Semantic-cache fallback for the TEXT/transcript half only — see
+  // app/api/verify-video-combined/route.ts's identical comment.
+  let textCacheMatchType: "exact" | "semantic" | null = null;
+  let textSemanticEmbedding: number[] | null = null;
 
   try {
     const { bytes, contentHash } = await downloadVideoFromStorage(admin, storagePath);
@@ -126,9 +132,22 @@ export async function POST(request: Request) {
     textCacheHit = textCached !== null;
     videoCacheHit = videoCached !== null;
     textCachedAt = textCached?.cached_at ?? null;
+    textCacheMatchType = textCacheHit ? "exact" : null;
+
+    let textSemanticMatch: CachedVerification | null = null;
+    if (!textCached) {
+      const semantic = await checkSemanticCache(admin, normalizedTranscript, "video_transcript", DEEP_ENGINE_VERSION);
+      textSemanticEmbedding = semantic.embedding;
+      textSemanticMatch = semantic.match;
+      if (textSemanticMatch) {
+        textCacheHit = true;
+        textCacheMatchType = "semantic";
+        textCachedAt = textSemanticMatch.cached_at;
+      }
+    }
 
     const [freshText, freshVideo] = await Promise.all([
-      textCached ? Promise.resolve(null) : runDeepInvestigation(transcript),
+      textCached || textSemanticMatch ? Promise.resolve(null) : runDeepInvestigation(transcript),
       videoCached
         ? Promise.resolve(null)
         : (async () => {
@@ -137,7 +156,7 @@ export async function POST(request: Request) {
             return runVideoDeepInvestigation(geminiFile.fileUri, mimeType, context || null);
           })(),
     ]);
-    textResult = textCached ?? (freshText as DeepInvestigationResult);
+    textResult = textCached ?? textSemanticMatch ?? (freshText as DeepInvestigationResult);
     videoResult = videoCached ?? (freshVideo as VideoAnalysisResult);
   } catch (err) {
     console.error("[deep-video-combined] pipeline failed (refunding credit):", err);
@@ -228,6 +247,17 @@ export async function POST(request: Request) {
 
   if (!textCacheHit) {
     await writeCache(admin, textCacheKey, transcriptRow.id, transcript);
+    if (textSemanticEmbedding) {
+      await writeSemanticCache(
+        admin,
+        textSemanticEmbedding,
+        "video_transcript",
+        DEEP_ENGINE_VERSION,
+        transcriptRow.id,
+        normalizedTranscript,
+        transcript
+      );
+    }
   }
   if (!videoCacheHit && videoRow) {
     await writeCache(admin, videoCacheKey, videoRow.id, "[video content]", AUDIO_CACHE_FRESHNESS);
@@ -237,7 +267,10 @@ export async function POST(request: Request) {
     user_id: user.id,
     credit_type: "deep_investigation",
     amount: -1,
-    reason: "deep_investigation_completed_combined_video",
+    reason:
+      textCacheHit && textCacheMatchType === "semantic"
+        ? "deep_investigation_completed_combined_video_semantic"
+        : "deep_investigation_completed_combined_video",
     verification_id: transcriptRow.id,
   });
   if (txnError) {

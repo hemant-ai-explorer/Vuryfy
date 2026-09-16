@@ -2,7 +2,14 @@ import { NextResponse } from "next/server";
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runQuickCheck, normalizeClaim, ENGINE_VERSION, type QuickCheckResult } from "@/lib/quick-check";
-import { computeCacheKey, getCachedVerification, writeCache, type CachedVerification } from "@/lib/verification-cache";
+import {
+  computeCacheKey,
+  getCachedVerification,
+  writeCache,
+  checkSemanticCache,
+  writeSemanticCache,
+  type CachedVerification,
+} from "@/lib/verification-cache";
 
 // Route-level execution budget (Sept 2026 fix — see app/api/deep/route.ts's
 // comment for the full rationale). 60 is Hobby's max; without it Vercel's
@@ -92,12 +99,33 @@ export async function POST(request: Request) {
     );
   }
 
+  // Semantic-cache fallback (Part 11's "Semantic" layer, Sept 16, 2026) —
+  // see app/api/verify/route.ts's identical comment for the full rationale.
+  // Payee-reputation claims are auto-constructed from a name/UPI ID (see
+  // buildPayeeClaim above), so this mainly helps when the same payee is
+  // re-investigated with a slightly different name spelling/casing that
+  // survives normalizeClaim() differently but still embeds near-identically.
   const cached = await getCachedVerification(admin, cacheKey);
-  const cacheHit = cached !== null;
+  let cacheHit = cached !== null;
+  let cacheMatchType: "exact" | "semantic" | null = cacheHit ? "exact" : null;
+  let semanticEmbedding: number[] | null = null;
+  let semanticMatch: CachedVerification | null = null;
+
+  if (!cached) {
+    const semantic = await checkSemanticCache(admin, normalizedClaim, "payee_reputation", ENGINE_VERSION);
+    semanticEmbedding = semantic.embedding;
+    semanticMatch = semantic.match;
+    if (semanticMatch) {
+      cacheHit = true;
+      cacheMatchType = "semantic";
+    }
+  }
 
   let result: QuickCheckResult | CachedVerification;
   if (cached) {
     result = cached;
+  } else if (semanticMatch) {
+    result = semanticMatch;
   } else {
     try {
       result = await runQuickCheck(searchClaim);
@@ -158,13 +186,28 @@ export async function POST(request: Request) {
 
   if (!cacheHit) {
     await writeCache(admin, cacheKey, verification.id, searchClaim);
+    if (semanticEmbedding) {
+      await writeSemanticCache(
+        admin,
+        semanticEmbedding,
+        "payee_reputation",
+        ENGINE_VERSION,
+        verification.id,
+        normalizedClaim,
+        searchClaim
+      );
+    }
   }
 
   const { error: txnError } = await admin.from("credit_transactions").insert({
     user_id: user.id,
     credit_type: "quick_check",
     amount: -1,
-    reason: cacheHit ? "quick_check_completed_payee_cache_hit" : "quick_check_completed_payee",
+    reason: cacheHit
+      ? cacheMatchType === "semantic"
+        ? "quick_check_completed_payee_cache_hit_semantic"
+        : "quick_check_completed_payee_cache_hit"
+      : "quick_check_completed_payee",
     verification_id: verification.id,
   });
   if (txnError) {

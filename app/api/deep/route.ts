@@ -3,7 +3,14 @@ import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runDeepInvestigation, DEEP_ENGINE_VERSION, type DeepInvestigationResult } from "@/lib/deep-investigation";
 import { normalizeClaim } from "@/lib/quick-check";
-import { computeCacheKey, getCachedVerification, writeCache, type CachedVerification } from "@/lib/verification-cache";
+import {
+  computeCacheKey,
+  getCachedVerification,
+  writeCache,
+  checkSemanticCache,
+  writeSemanticCache,
+  type CachedVerification,
+} from "@/lib/verification-cache";
 import { detectPaymentReceipt } from "@/lib/detect-payment-receipt";
 import { detectPaymentRequest } from "@/lib/detect-payment-request";
 
@@ -153,12 +160,29 @@ export async function POST(request: Request) {
     );
   }
 
+  // Semantic-cache fallback (Part 11's "Semantic" layer, Sept 16, 2026) —
+  // see app/api/verify/route.ts's identical comment for the full rationale.
   const cached = await getCachedVerification(admin, cacheKey);
-  const cacheHit = cached !== null;
+  let cacheHit = cached !== null;
+  let cacheMatchType: "exact" | "semantic" | null = cacheHit ? "exact" : null;
+  let semanticEmbedding: number[] | null = null;
+  let semanticMatch: CachedVerification | null = null;
+
+  if (!cached) {
+    const semantic = await checkSemanticCache(admin, normalizedClaim, inputType, DEEP_ENGINE_VERSION);
+    semanticEmbedding = semantic.embedding;
+    semanticMatch = semantic.match;
+    if (semanticMatch) {
+      cacheHit = true;
+      cacheMatchType = "semantic";
+    }
+  }
 
   let result: DeepInvestigationResult | CachedVerification;
   if (cached) {
     result = cached;
+  } else if (semanticMatch) {
+    result = semanticMatch;
   } else {
     try {
       result = await runDeepInvestigation(claim);
@@ -237,13 +261,20 @@ export async function POST(request: Request) {
 
   if (!cacheHit) {
     await writeCache(admin, cacheKey, verification.id, claim);
+    if (semanticEmbedding) {
+      await writeSemanticCache(admin, semanticEmbedding, inputType, DEEP_ENGINE_VERSION, verification.id, normalizedClaim, claim);
+    }
   }
 
   const { error: txnError } = await admin.from("credit_transactions").insert({
     user_id: user.id,
     credit_type: "deep_investigation",
     amount: -1,
-    reason: cacheHit ? "deep_investigation_completed_cache_hit" : "deep_investigation_completed",
+    reason: cacheHit
+      ? cacheMatchType === "semantic"
+        ? "deep_investigation_completed_cache_hit_semantic"
+        : "deep_investigation_completed_cache_hit"
+      : "deep_investigation_completed",
     verification_id: verification.id,
   });
   if (txnError) {

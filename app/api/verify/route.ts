@@ -2,7 +2,14 @@ import { NextResponse } from "next/server";
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runQuickCheck, normalizeClaim, ENGINE_VERSION, type QuickCheckResult } from "@/lib/quick-check";
-import { computeCacheKey, getCachedVerification, writeCache, type CachedVerification } from "@/lib/verification-cache";
+import {
+  computeCacheKey,
+  getCachedVerification,
+  writeCache,
+  checkSemanticCache,
+  writeSemanticCache,
+  type CachedVerification,
+} from "@/lib/verification-cache";
 import { detectPaymentReceipt } from "@/lib/detect-payment-receipt";
 import { detectPaymentRequest } from "@/lib/detect-payment-request";
 
@@ -173,12 +180,32 @@ export async function POST(request: Request) {
   // Credit is now reserved — from here on we owe the user a verdict (and
   // keep the charge) if we can produce one (fresh or cached), or refund it
   // if the pipeline itself fails for infrastructure reasons.
+  // Semantic-cache fallback (Part 11's "Semantic" layer, Sept 16, 2026 —
+  // see lib/verification-cache.ts's own header for the full design and the
+  // conservative-threshold rationale). Only consulted on an exact-cache
+  // MISS — an exact hit is by definition the same claim and cheaper to
+  // confirm, so there's no reason to also pay for an embedding call.
   const cached = await getCachedVerification(admin, cacheKey);
-  const cacheHit = cached !== null;
+  let cacheHit = cached !== null;
+  let cacheMatchType: "exact" | "semantic" | null = cacheHit ? "exact" : null;
+  let semanticEmbedding: number[] | null = null;
+  let semanticMatch: CachedVerification | null = null;
+
+  if (!cached) {
+    const semantic = await checkSemanticCache(admin, normalizedClaim, inputType, ENGINE_VERSION);
+    semanticEmbedding = semantic.embedding;
+    semanticMatch = semantic.match;
+    if (semanticMatch) {
+      cacheHit = true;
+      cacheMatchType = "semantic";
+    }
+  }
 
   let result: QuickCheckResult | CachedVerification;
   if (cached) {
     result = cached;
+  } else if (semanticMatch) {
+    result = semanticMatch;
   } else {
     try {
       result = await runQuickCheck(claim);
@@ -267,13 +294,20 @@ export async function POST(request: Request) {
   // just reset its TTL clock for no benefit.
   if (!cacheHit) {
     await writeCache(admin, cacheKey, verification.id, claim);
+    if (semanticEmbedding) {
+      await writeSemanticCache(admin, semanticEmbedding, inputType, ENGINE_VERSION, verification.id, normalizedClaim, claim);
+    }
   }
 
   const { error: txnError } = await admin.from("credit_transactions").insert({
     user_id: user.id,
     credit_type: "quick_check",
     amount: -1,
-    reason: cacheHit ? "quick_check_completed_cache_hit" : "quick_check_completed",
+    reason: cacheHit
+      ? cacheMatchType === "semantic"
+        ? "quick_check_completed_cache_hit_semantic"
+        : "quick_check_completed_cache_hit"
+      : "quick_check_completed",
     verification_id: verification.id,
   });
   if (txnError) {
