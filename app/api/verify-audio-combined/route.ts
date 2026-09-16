@@ -7,6 +7,8 @@ import {
   computeCacheKey,
   getCachedVerification,
   writeCache,
+  checkSemanticCache,
+  writeSemanticCache,
   AUDIO_CACHE_FRESHNESS,
   type CachedVerification,
 } from "@/lib/verification-cache";
@@ -139,17 +141,36 @@ export async function POST(request: Request) {
     getCachedVerification(admin, textCacheKey),
     getCachedVerification(admin, audioCacheKey),
   ]);
-  const textCacheHit = textCached !== null;
+  let textCacheHit = textCached !== null;
   const audioCacheHit = audioCached !== null;
+
+  // Semantic-cache fallback for the TEXT/transcript half only (Part 11's
+  // "Semantic" layer, Sept 16, 2026 — see app/api/verify/route.ts's
+  // identical comment for the full rationale). Never applied to the audio
+  // half — that cache key is a hash of the raw audio bytes themselves
+  // (see this file's header), not a "claim" with any meaningful semantic
+  // similarity to embed.
+  let textCacheMatchType: "exact" | "semantic" | null = textCacheHit ? "exact" : null;
+  let textSemanticEmbedding: number[] | null = null;
+  let textSemanticMatch: CachedVerification | null = null;
+  if (!textCached) {
+    const semantic = await checkSemanticCache(admin, normalizedTranscript, "audio_transcript", ENGINE_VERSION);
+    textSemanticEmbedding = semantic.embedding;
+    textSemanticMatch = semantic.match;
+    if (textSemanticMatch) {
+      textCacheHit = true;
+      textCacheMatchType = "semantic";
+    }
+  }
 
   let textResult: QuickCheckResult | CachedVerification;
   let audioResult: AudioAnalysisResult | CachedVerification;
   try {
     const [freshText, freshAudio] = await Promise.all([
-      textCached ? Promise.resolve(null) : runQuickCheck(transcript),
+      textCached || textSemanticMatch ? Promise.resolve(null) : runQuickCheck(transcript),
       audioCached ? Promise.resolve(null) : runAudioQuickCheck(audioBase64, mimeType, context || null),
     ]);
-    textResult = textCached ?? (freshText as QuickCheckResult);
+    textResult = textCached ?? textSemanticMatch ?? (freshText as QuickCheckResult);
     audioResult = audioCached ?? (freshAudio as AudioAnalysisResult);
   } catch (err) {
     console.error("[verify-audio-combined] pipeline failed (refunding credit):", err);
@@ -230,6 +251,17 @@ export async function POST(request: Request) {
 
   if (!textCacheHit) {
     await writeCache(admin, textCacheKey, transcriptRow.id, transcript);
+    if (textSemanticEmbedding) {
+      await writeSemanticCache(
+        admin,
+        textSemanticEmbedding,
+        "audio_transcript",
+        ENGINE_VERSION,
+        transcriptRow.id,
+        normalizedTranscript,
+        transcript
+      );
+    }
   }
   if (!audioCacheHit && audioRow) {
     await writeCache(admin, audioCacheKey, audioRow.id, "[audio content]", AUDIO_CACHE_FRESHNESS);
@@ -239,7 +271,10 @@ export async function POST(request: Request) {
     user_id: user.id,
     credit_type: "quick_check",
     amount: -1,
-    reason: "quick_check_completed_combined_audio",
+    reason:
+      textCacheHit && textCacheMatchType === "semantic"
+        ? "quick_check_completed_combined_audio_semantic"
+        : "quick_check_completed_combined_audio",
     verification_id: transcriptRow.id,
   });
   if (txnError) {

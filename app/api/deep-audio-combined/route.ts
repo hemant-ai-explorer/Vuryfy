@@ -8,6 +8,8 @@ import {
   computeCacheKey,
   getCachedVerification,
   writeCache,
+  checkSemanticCache,
+  writeSemanticCache,
   AUDIO_CACHE_FRESHNESS,
   type CachedVerification,
 } from "@/lib/verification-cache";
@@ -109,17 +111,32 @@ export async function POST(request: Request) {
     getCachedVerification(admin, textCacheKey),
     getCachedVerification(admin, audioCacheKey),
   ]);
-  const textCacheHit = textCached !== null;
+  let textCacheHit = textCached !== null;
   const audioCacheHit = audioCached !== null;
+
+  // Semantic-cache fallback for the TEXT/transcript half only — see
+  // app/api/verify-audio-combined/route.ts's identical comment.
+  let textCacheMatchType: "exact" | "semantic" | null = textCacheHit ? "exact" : null;
+  let textSemanticEmbedding: number[] | null = null;
+  let textSemanticMatch: CachedVerification | null = null;
+  if (!textCached) {
+    const semantic = await checkSemanticCache(admin, normalizedTranscript, "audio_transcript", DEEP_ENGINE_VERSION);
+    textSemanticEmbedding = semantic.embedding;
+    textSemanticMatch = semantic.match;
+    if (textSemanticMatch) {
+      textCacheHit = true;
+      textCacheMatchType = "semantic";
+    }
+  }
 
   let textResult: DeepInvestigationResult | CachedVerification;
   let audioResult: AudioAnalysisResult | CachedVerification;
   try {
     const [freshText, freshAudio] = await Promise.all([
-      textCached ? Promise.resolve(null) : runDeepInvestigation(transcript),
+      textCached || textSemanticMatch ? Promise.resolve(null) : runDeepInvestigation(transcript),
       audioCached ? Promise.resolve(null) : runAudioDeepInvestigation(audioBase64, mimeType, context || null),
     ]);
-    textResult = textCached ?? (freshText as DeepInvestigationResult);
+    textResult = textCached ?? textSemanticMatch ?? (freshText as DeepInvestigationResult);
     audioResult = audioCached ?? (freshAudio as AudioAnalysisResult);
   } catch (err) {
     console.error("[deep-audio-combined] pipeline failed (refunding credit):", err);
@@ -201,6 +218,17 @@ export async function POST(request: Request) {
 
   if (!textCacheHit) {
     await writeCache(admin, textCacheKey, transcriptRow.id, transcript);
+    if (textSemanticEmbedding) {
+      await writeSemanticCache(
+        admin,
+        textSemanticEmbedding,
+        "audio_transcript",
+        DEEP_ENGINE_VERSION,
+        transcriptRow.id,
+        normalizedTranscript,
+        transcript
+      );
+    }
   }
   if (!audioCacheHit && audioRow) {
     await writeCache(admin, audioCacheKey, audioRow.id, "[audio content]", AUDIO_CACHE_FRESHNESS);
@@ -210,7 +238,10 @@ export async function POST(request: Request) {
     user_id: user.id,
     credit_type: "deep_investigation",
     amount: -1,
-    reason: "deep_investigation_completed_combined_audio",
+    reason:
+      textCacheHit && textCacheMatchType === "semantic"
+        ? "deep_investigation_completed_combined_audio_semantic"
+        : "deep_investigation_completed_combined_audio",
     verification_id: transcriptRow.id,
   });
   if (txnError) {

@@ -13,6 +13,8 @@ import {
   computeCacheKey,
   getCachedVerification,
   writeCache,
+  checkSemanticCache,
+  writeSemanticCache,
   AUDIO_CACHE_FRESHNESS,
   type CachedVerification,
 } from "@/lib/verification-cache";
@@ -125,6 +127,13 @@ export async function POST(request: Request) {
   let textCacheHit: boolean;
   let videoCacheHit: boolean;
   let textCachedAt: string | null = null;
+  // Semantic-cache fallback for the TEXT/transcript half only (Part 11's
+  // "Semantic" layer, Sept 16, 2026) — see app/api/verify/route.ts's
+  // identical comment for the full rationale. Never applied to the video
+  // half — that cache key is a content hash of the video bytes themselves,
+  // not a "claim" with any meaningful semantic similarity to embed.
+  let textCacheMatchType: "exact" | "semantic" | null = null;
+  let textSemanticEmbedding: number[] | null = null;
 
   try {
     const { bytes, contentHash } = await downloadVideoFromStorage(admin, storagePath);
@@ -137,9 +146,22 @@ export async function POST(request: Request) {
     textCacheHit = textCached !== null;
     videoCacheHit = videoCached !== null;
     textCachedAt = textCached?.cached_at ?? null;
+    textCacheMatchType = textCacheHit ? "exact" : null;
+
+    let textSemanticMatch: CachedVerification | null = null;
+    if (!textCached) {
+      const semantic = await checkSemanticCache(admin, normalizedTranscript, "video_transcript", ENGINE_VERSION);
+      textSemanticEmbedding = semantic.embedding;
+      textSemanticMatch = semantic.match;
+      if (textSemanticMatch) {
+        textCacheHit = true;
+        textCacheMatchType = "semantic";
+        textCachedAt = textSemanticMatch.cached_at;
+      }
+    }
 
     const [freshText, freshVideo] = await Promise.all([
-      textCached ? Promise.resolve(null) : runQuickCheck(transcript),
+      textCached || textSemanticMatch ? Promise.resolve(null) : runQuickCheck(transcript),
       videoCached
         ? Promise.resolve(null)
         : (async () => {
@@ -148,7 +170,7 @@ export async function POST(request: Request) {
             return runVideoQuickCheck(geminiFile.fileUri, mimeType, context || null);
           })(),
     ]);
-    textResult = textCached ?? (freshText as QuickCheckResult);
+    textResult = textCached ?? textSemanticMatch ?? (freshText as QuickCheckResult);
     videoResult = videoCached ?? (freshVideo as VideoAnalysisResult);
   } catch (err) {
     console.error("[verify-video-combined] pipeline failed (refunding credit):", err);
@@ -236,6 +258,17 @@ export async function POST(request: Request) {
 
   if (!textCacheHit) {
     await writeCache(admin, textCacheKey, transcriptRow.id, transcript);
+    if (textSemanticEmbedding) {
+      await writeSemanticCache(
+        admin,
+        textSemanticEmbedding,
+        "video_transcript",
+        ENGINE_VERSION,
+        transcriptRow.id,
+        normalizedTranscript,
+        transcript
+      );
+    }
   }
   if (!videoCacheHit && videoRow) {
     await writeCache(admin, videoCacheKey, videoRow.id, "[video content]", AUDIO_CACHE_FRESHNESS);
@@ -245,7 +278,10 @@ export async function POST(request: Request) {
     user_id: user.id,
     credit_type: "quick_check",
     amount: -1,
-    reason: "quick_check_completed_combined_video",
+    reason:
+      textCacheHit && textCacheMatchType === "semantic"
+        ? "quick_check_completed_combined_video_semantic"
+        : "quick_check_completed_combined_video",
     verification_id: transcriptRow.id,
   });
   if (txnError) {
