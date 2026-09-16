@@ -1,5 +1,6 @@
 import { callStructured } from "@/lib/ai-gateway";
 import type { QuickCheckEvidence } from "@/lib/quick-check";
+import { translate, LANGUAGE_NAMES, type Language } from "@/lib/translations";
 
 // Audio authenticity analysis — the second half of audio input (the first
 // half, transcript-based fact-checking, reuses quick-check.ts/
@@ -78,6 +79,10 @@ import type { QuickCheckEvidence } from "@/lib/quick-check";
 // caching opportunity, more so than for photos. Left uncached in V1 for
 // consistency and to avoid scope creep; revisit if real usage shows
 // meaningful duplicate-audio traffic.
+//
+// Output localization (Sept 16, 2026 fast-follow) — see
+// lib/video-analysis.ts's identical comment for the full rationale; same
+// mechanism applied here, just for audio's own fields.
 
 export const AUDIO_QUICK_ENGINE_VERSION = "v4-gemini-audio-quick-aigen";
 // Sept 15, 2026: bumped v4 -> v5 — same reasoning as video-analysis.ts's
@@ -166,6 +171,14 @@ const QUICK_SYSTEM_PROMPT = `You are Vuryfy's audio Quick Check engine, giving a
 
 const DEEP_SYSTEM_PROMPT = `You are Vuryfy's audio Deep Investigation engine, giving a slower, more thorough listen than a Quick Check. Listen carefully across the whole clip — consistency of voice timbre and pacing throughout (if speech is present), naturalness and variation of any repeated sounds, background noise/room tone continuity, any abrupt transitions or cut points, and any artifacts typical of AI-generated speech, music, or soundscapes. ${HONESTY_RULES}`;
 
+// Output localization (Sept 16, 2026) — mirrors quick-check.ts's
+// languageInstruction() exactly, just naming this file's own free-text
+// fields.
+function languageInstruction(language: Language): string {
+  if (language === "en") return "";
+  return `\n\nWrite the "summary" and "ai_generated_reasoning" fields, and each item in "signals_found", in natural, fluent ${LANGUAGE_NAMES[language]}.`;
+}
+
 function buildUserPrompt(context: string | null): string {
   const contextLine = context && context.trim().length > 0
     ? `Context the user provided about what this recording is supposed to be:\n"${context.trim()}"\n\n`
@@ -173,17 +186,13 @@ function buildUserPrompt(context: string | null): string {
   return `${contextLine}Analyze the attached audio.`;
 }
 
-// Code-enforced disclaimer, same pattern as image-analysis.ts.
-const DISCLAIMER =
-  "This is primarily an audible read of the recording itself — Vuryfy has no way to independently confirm who recorded this, when, or where.";
-
-const AI_LABELS: Record<string, string> = {
-  likely: "Likely AI-generated",
-  unlikely: "Unlikely to be AI-generated",
-  uncertain: "Uncertain whether this is AI-generated",
+const AI_LABEL_KEYS: Record<string, string> = {
+  likely: "pipeline.audio.aiLikely",
+  unlikely: "pipeline.audio.aiUnlikely",
+  uncertain: "pipeline.audio.aiUncertain",
 };
 
-function toResult(data: AudioOutput, engineVersion: string): AudioAnalysisResult {
+function toResult(data: AudioOutput, engineVersion: string, language: Language): AudioAnalysisResult {
   let verdict = VERDICTS.includes(data.verdict) ? data.verdict : "Inconclusive";
   const confidence = Number.isFinite(data.confidence) ? Math.max(0, Math.min(100, Math.round(data.confidence))) : 0;
   const aiLikelihood = AI_LIKELIHOODS.includes(data.ai_generated_likelihood)
@@ -192,15 +201,18 @@ function toResult(data: AudioOutput, engineVersion: string): AudioAnalysisResult
   const aiReasoning =
     typeof data.ai_generated_reasoning === "string" && data.ai_generated_reasoning.trim()
       ? data.ai_generated_reasoning.trim()
-      : "No specific signals were described.";
+      : translate(language, "pipeline.common.noSignalsDescribed");
   const generalSummary =
-    typeof data.summary === "string" && data.summary.trim() ? data.summary.trim() : "No explanation was returned.";
+    typeof data.summary === "string" && data.summary.trim()
+      ? data.summary.trim()
+      : translate(language, "pipeline.common.noExplanation");
   const signals = Array.isArray(data.signals_found)
     ? data.signals_found.filter((s) => typeof s === "string" && s.trim().length > 0)
     : [];
 
-  // Defensive downgrades (mirrors image-analysis.ts) — code-enforced
-  // backstops in case the model doesn't follow the instructions above:
+  // Defensive downgrades (mirrors image-analysis.ts / video-analysis.ts) —
+  // code-enforced backstops in case the model doesn't follow the
+  // instructions above:
   // 1. A "likely AI-generated" call can never be paired with verdict
   //    "Clean" — that would flatly contradict itself.
   // 2. An "uncertain" call can never be paired with verdict "Clean"
@@ -220,19 +232,17 @@ function toResult(data: AudioOutput, engineVersion: string): AudioAnalysisResult
   // so it leads the summary (the "WHY" section — the most prominent text on
   // the result screen) rather than being left implicit in signals_found or
   // buried in the caveats list below.
-  const summary = `AI-generated: ${AI_LABELS[aiLikelihood]}. ${aiReasoning} ${generalSummary}`.trim();
+  const summary = `${translate(language, "pipeline.audio.summaryPrefix")} ${translate(language, AI_LABEL_KEYS[aiLikelihood])}. ${aiReasoning} ${generalSummary}`.trim();
 
-  const caveats: string[] = [DISCLAIMER];
+  const caveats: string[] = [translate(language, "pipeline.audio.disclaimer")];
   if (data.contains_speech && aiLikelihood !== "likely") {
-    caveats.push(
-      "Top-tier AI voice-cloning tools (ElevenLabs and similar) are built to sound indistinguishable from real speech, breath sounds and all — a listen-through like this one cannot reliably catch the best of them, so an \"unlikely\"/\"uncertain\" call here means no capture-environment evidence was found either way, not that the voice is confirmed human."
-    );
+    caveats.push(translate(language, "pipeline.audio.caveatSpeech"));
   }
-  for (const s of signals) caveats.push(`Observed: ${s.trim()}`);
+  for (const s of signals) caveats.push(`${translate(language, "pipeline.common.observedPrefix")}${s.trim()}`);
   if (data.context_match === "inconsistent") {
-    caveats.push("The described context doesn't audibly match what's heard in the recording.");
+    caveats.push(translate(language, "pipeline.audio.contextInconsistent"));
   } else if (data.context_match === "consistent") {
-    caveats.push("What's audible is at least plausible with the context described, though this is still only a listen-through, not a confirmed match.");
+    caveats.push(translate(language, "pipeline.audio.contextConsistent"));
   }
 
   return {
@@ -249,32 +259,34 @@ function toResult(data: AudioOutput, engineVersion: string): AudioAnalysisResult
 export async function runAudioQuickCheck(
   audioBase64: string,
   mimeType: string,
-  context: string | null
+  context: string | null,
+  language: Language = "en"
 ): Promise<AudioAnalysisResult> {
   const { data } = await callStructured<AudioOutput>({
     tier: "cheap",
-    systemPrompt: QUICK_SYSTEM_PROMPT,
+    systemPrompt: QUICK_SYSTEM_PROMPT + languageInstruction(language),
     userPrompt: buildUserPrompt(context),
     responseSchema: AUDIO_SCHEMA,
     audioParts: [{ mimeType, data: audioBase64 }],
     timeoutMs: 25_000,
   });
-  return toResult(data, AUDIO_QUICK_ENGINE_VERSION);
+  return toResult(data, AUDIO_QUICK_ENGINE_VERSION, language);
 }
 
 export async function runAudioDeepInvestigation(
   audioBase64: string,
   mimeType: string,
-  context: string | null
+  context: string | null,
+  language: Language = "en"
 ): Promise<AudioAnalysisResult> {
   const { data } = await callStructured<AudioOutput>({
     tier: "reasoning",
-    systemPrompt: DEEP_SYSTEM_PROMPT,
+    systemPrompt: DEEP_SYSTEM_PROMPT + languageInstruction(language),
     userPrompt: buildUserPrompt(context),
     responseSchema: AUDIO_SCHEMA,
     audioParts: [{ mimeType, data: audioBase64 }],
     timeoutMs: 30_000,
     fallbackModels: AUDIO_DEEP_FALLBACK_MODELS,
   });
-  return toResult(data, AUDIO_DEEP_ENGINE_VERSION);
+  return toResult(data, AUDIO_DEEP_ENGINE_VERSION, language);
 }

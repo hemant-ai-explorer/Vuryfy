@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { runDeepInvestigation, DEEP_ENGINE_VERSION, type DeepInvestigationResult } from "@/lib/deep-investigation";
 import { normalizeClaim } from "@/lib/quick-check";
 import { runAudioDeepInvestigation, AUDIO_DEEP_ENGINE_VERSION, type AudioAnalysisResult } from "@/lib/audio-analysis";
+import { getUserLanguage } from "@/lib/user-language";
 import {
   computeCacheKey,
   getCachedVerification,
@@ -33,6 +34,9 @@ export const maxDuration = 60;
 // pipeline produces caveats; Quick Check's doesn't — see
 // app/api/deep/route.ts vs app/api/verify/route.ts for the same asymmetry
 // elsewhere in the app).
+//
+// Sept 16, 2026 fast-follow: both cache namespaces are now language-aware
+// — see app/api/verify-audio-combined/route.ts's identical comment.
 const ALLOWED_MIME_TYPES = new Set([
   "audio/mpeg",
   "audio/mp3",
@@ -85,9 +89,12 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+  const language = await getUserLanguage(admin, user.id);
+  const textCacheNamespace = language === "en" ? "audio_transcript" : `audio_transcript:${language}`;
+  const audioCacheNamespace = language === "en" ? "audio" : `audio:${language}`;
   const normalizedTranscript = normalizeClaim(transcript);
-  const textCacheKey = computeCacheKey(normalizedTranscript, "audio_transcript", DEEP_ENGINE_VERSION);
-  const audioCacheKey = computeCacheKey(`${audioBase64}|ctx:${context}`, "audio", AUDIO_DEEP_ENGINE_VERSION);
+  const textCacheKey = computeCacheKey(normalizedTranscript, textCacheNamespace, DEEP_ENGINE_VERSION);
+  const audioCacheKey = computeCacheKey(`${audioBase64}|ctx:${context}`, audioCacheNamespace, AUDIO_DEEP_ENGINE_VERSION);
 
   const { data: remaining, error: rpcError } = await admin.rpc("decrement_deep_investigation", {
     p_user_id: user.id,
@@ -120,7 +127,7 @@ export async function POST(request: Request) {
   let textSemanticEmbedding: number[] | null = null;
   let textSemanticMatch: CachedVerification | null = null;
   if (!textCached) {
-    const semantic = await checkSemanticCache(admin, normalizedTranscript, "audio_transcript", DEEP_ENGINE_VERSION);
+    const semantic = await checkSemanticCache(admin, normalizedTranscript, textCacheNamespace, DEEP_ENGINE_VERSION);
     textSemanticEmbedding = semantic.embedding;
     textSemanticMatch = semantic.match;
     if (textSemanticMatch) {
@@ -133,8 +140,8 @@ export async function POST(request: Request) {
   let audioResult: AudioAnalysisResult | CachedVerification;
   try {
     const [freshText, freshAudio] = await Promise.all([
-      textCached || textSemanticMatch ? Promise.resolve(null) : runDeepInvestigation(transcript),
-      audioCached ? Promise.resolve(null) : runAudioDeepInvestigation(audioBase64, mimeType, context || null),
+      textCached || textSemanticMatch ? Promise.resolve(null) : runDeepInvestigation(transcript, language),
+      audioCached ? Promise.resolve(null) : runAudioDeepInvestigation(audioBase64, mimeType, context || null, language),
     ]);
     textResult = textCached ?? textSemanticMatch ?? (freshText as DeepInvestigationResult);
     audioResult = audioCached ?? (freshAudio as AudioAnalysisResult);
@@ -222,7 +229,7 @@ export async function POST(request: Request) {
       await writeSemanticCache(
         admin,
         textSemanticEmbedding,
-        "audio_transcript",
+        textCacheNamespace,
         DEEP_ENGINE_VERSION,
         transcriptRow.id,
         normalizedTranscript,

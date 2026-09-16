@@ -3,6 +3,7 @@ import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runAudioQuickCheck, AUDIO_QUICK_ENGINE_VERSION, type AudioAnalysisResult } from "@/lib/audio-analysis";
 import { normalizeClaim } from "@/lib/quick-check";
+import { getUserLanguage } from "@/lib/user-language";
 import {
   computeCacheKey,
   getCachedVerification,
@@ -46,6 +47,12 @@ export const maxDuration = 60;
 // user" rules as text caching. Uses AUDIO_CACHE_FRESHNESS rather than
 // classifyFreshness() — that classifier's keyword regexes are meaningless
 // against raw audio content (see verification-cache.ts's comment on this).
+//
+// Sept 16, 2026 fast-follow: cache namespace is now language-aware (same
+// pattern as app/api/verify/route.ts) — the audio bytes are the same
+// regardless of viewer language, but the returned summary/caveats text
+// differs by language. English keeps the original, un-suffixed namespace
+// so existing cache entries still hit.
 const ALLOWED_MIME_TYPES = new Set([
   "audio/mpeg",
   "audio/mp3",
@@ -88,7 +95,9 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
-  const cacheKey = computeCacheKey(`${audioBase64}|ctx:${context}`, "audio", AUDIO_QUICK_ENGINE_VERSION);
+  const language = await getUserLanguage(admin, user.id);
+  const audioCacheNamespace = language === "en" ? "audio" : `audio:${language}`;
+  const cacheKey = computeCacheKey(`${audioBase64}|ctx:${context}`, audioCacheNamespace, AUDIO_QUICK_ENGINE_VERSION);
 
   const { data: remaining, error: rpcError } = await admin.rpc("decrement_quick_check", {
     p_user_id: user.id,
@@ -117,7 +126,7 @@ export async function POST(request: Request) {
     result = cached;
   } else {
     try {
-      result = await runAudioQuickCheck(audioBase64, mimeType, context || null);
+      result = await runAudioQuickCheck(audioBase64, mimeType, context || null, language);
     } catch (err) {
       console.error("[verify-audio] pipeline failed (refunding credit):", err);
 

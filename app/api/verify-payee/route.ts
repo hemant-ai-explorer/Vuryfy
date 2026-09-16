@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runQuickCheck, normalizeClaim, ENGINE_VERSION, type QuickCheckResult } from "@/lib/quick-check";
+import { getUserLanguage } from "@/lib/user-language";
 import {
   computeCacheKey,
   getCachedVerification,
@@ -47,6 +48,15 @@ export const maxDuration = 60;
 // happened, so it costs a Quick Check credit like any other claim, and
 // gets the same exact-match caching (a repeat investigation of the same
 // payee within the cache TTL doesn't re-run the search).
+//
+// Sept 16, 2026 fast-follow: reuses lib/quick-check.ts's own output
+// localization (a `language` param already threaded through that
+// pipeline) — this route just needed to look up the user's language and
+// pass it along, plus namespace the cache key by language, same pattern
+// as app/api/verify/route.ts. This route's own DISCLAIMER caveat is NOT
+// yet localized (still English-only) — that's a small remaining gap, left
+// for a follow-up since it's a single fixed sentence rather than part of
+// the reported bug (video/audio/image authenticity results).
 const DISCLAIMER =
   "This searches the public web for reports about this payee — it can't confirm who actually controls the payment ID, and finding nothing doesn't mean they're legitimate. Most real businesses and most scammers alike often have little to no searchable footprint.";
 
@@ -76,9 +86,11 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+  const language = await getUserLanguage(admin, user.id);
+  const cacheNamespace = language === "en" ? "payee_reputation" : `payee_reputation:${language}`;
   const searchClaim = buildPayeeClaim(payeeName, upiId);
   const normalizedClaim = normalizeClaim(searchClaim);
-  const cacheKey = computeCacheKey(normalizedClaim, "payee_reputation", ENGINE_VERSION);
+  const cacheKey = computeCacheKey(normalizedClaim, cacheNamespace, ENGINE_VERSION);
   const displayClaim = payeeName ? `${payeeName} — ${upiId}` : upiId;
 
   const { data: remaining, error: rpcError } = await admin.rpc("decrement_quick_check", {
@@ -112,7 +124,7 @@ export async function POST(request: Request) {
   let semanticMatch: CachedVerification | null = null;
 
   if (!cached) {
-    const semantic = await checkSemanticCache(admin, normalizedClaim, "payee_reputation", ENGINE_VERSION);
+    const semantic = await checkSemanticCache(admin, normalizedClaim, cacheNamespace, ENGINE_VERSION);
     semanticEmbedding = semantic.embedding;
     semanticMatch = semantic.match;
     if (semanticMatch) {
@@ -128,7 +140,7 @@ export async function POST(request: Request) {
     result = semanticMatch;
   } else {
     try {
-      result = await runQuickCheck(searchClaim);
+      result = await runQuickCheck(searchClaim, language);
     } catch (err) {
       console.error("[verify-payee] pipeline failed (refunding credit):", err);
 
@@ -190,7 +202,7 @@ export async function POST(request: Request) {
       await writeSemanticCache(
         admin,
         semanticEmbedding,
-        "payee_reputation",
+        cacheNamespace,
         ENGINE_VERSION,
         verification.id,
         normalizedClaim,

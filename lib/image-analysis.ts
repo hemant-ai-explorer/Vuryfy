@@ -1,6 +1,7 @@
 import { callStructured } from "@/lib/ai-gateway";
 import { detectWeb, type MatchingPage } from "@/lib/web-detection";
 import type { QuickCheckEvidence } from "@/lib/quick-check";
+import { translate, LANGUAGE_NAMES, type Language } from "@/lib/translations";
 
 // Photo-as-claim vision pipeline — the second half of image input (the
 // first half, OCR text-in-image, just reuses quick-check.ts/
@@ -73,6 +74,11 @@ import type { QuickCheckEvidence } from "@/lib/quick-check";
 // the original rationale (real photos are essentially never byte-
 // identical on resubmission, so an exact-match cache would almost never
 // hit). Web Detection results aren't cached either for the same reason.
+//
+// Output localization (Sept 16, 2026 fast-follow) — see
+// lib/video-analysis.ts's identical comment for the full rationale; same
+// mechanism applied here. Image has no ai_generated_* fields, so only
+// "summary" and each "signals_found" item get the prompt instruction.
 
 export const IMAGE_QUICK_ENGINE_VERSION = "v1-gemini-vision-quick";
 export const IMAGE_DEEP_ENGINE_VERSION = "v2-gemini-vision-webdetect-deep";
@@ -142,6 +148,14 @@ const QUICK_SYSTEM_PROMPT = `You are Vuryfy's image Quick Check engine, giving a
 const DEEP_SYSTEM_PROMPT = `You are Vuryfy's image Deep Investigation engine, giving a slower, more thorough read of a photo than a Quick Check. Look carefully across the whole frame — foreground and background, edges between distinct objects/people, lighting direction and shadow consistency across every element, reflections, hands/faces for anatomical errors, and any text visible inside the image for garbling.
 If web pages featuring this same image are listed below, weigh them as real evidence: use verdict "Out of Context" ONLY when those pages show this exact image was already circulating in a different context than what's claimed here (e.g. from an earlier event, a different location, a different story entirely) — cite the specific page ids in cited_page_ids. Do not use "Out of Context" just because pages were listed; only when they actually establish a mismatch. ${HONESTY_RULES}`;
 
+// Output localization (Sept 16, 2026) — mirrors quick-check.ts's
+// languageInstruction() exactly, just naming this file's own free-text
+// fields.
+function languageInstruction(language: Language): string {
+  if (language === "en") return "";
+  return `\n\nWrite the "summary" field and each item in "signals_found" in natural, fluent ${LANGUAGE_NAMES[language]}.`;
+}
+
 function buildUserPrompt(context: string | null, webPages: MatchingPage[]): string {
   const contextLine = context && context.trim().length > 0
     ? `Context the user provided about what this image is supposed to show:\n"${context.trim()}"\n\n`
@@ -154,22 +168,19 @@ function buildUserPrompt(context: string | null, webPages: MatchingPage[]): stri
   return `${contextLine}${webBlock}Analyze the attached image.`;
 }
 
-// Code-enforced disclaimer (mirrors the code-enforced grounding pattern in
-// quick-check.ts/deep-investigation.ts): this caveat is added in code, not
-// requested from the model, so it appears on every single result
-// regardless of how a given response happens to be phrased.
-const DISCLAIMER =
-  "This is primarily a visual read of the image itself — Vuryfy has no way to independently confirm who took this photo, when, or where, beyond what any cited web pages below actually say.";
-
 function toResult(
   data: VisionOutput,
   engineVersion: string,
   allowedVerdicts: string[],
-  webPages: MatchingPage[]
+  webPages: MatchingPage[],
+  language: Language
 ): ImageAnalysisResult {
   const verdict = allowedVerdicts.includes(data.verdict) ? data.verdict : "Inconclusive";
   const confidence = Number.isFinite(data.confidence) ? Math.max(0, Math.min(100, Math.round(data.confidence))) : 0;
-  const summary = typeof data.summary === "string" && data.summary.trim() ? data.summary.trim() : "No explanation was returned.";
+  const summary =
+    typeof data.summary === "string" && data.summary.trim()
+      ? data.summary.trim()
+      : translate(language, "pipeline.common.noExplanation");
   const signals = Array.isArray(data.signals_found)
     ? data.signals_found.filter((s) => typeof s === "string" && s.trim().length > 0)
     : [];
@@ -186,18 +197,18 @@ function toResult(
     });
   const sources = keyEvidence.map((e) => ({ title: e.title, url: e.url }));
 
-  const caveats: string[] = [DISCLAIMER];
-  for (const s of signals) caveats.push(`Observed: ${s.trim()}`);
+  const caveats: string[] = [translate(language, "pipeline.image.disclaimer")];
+  for (const s of signals) caveats.push(`${translate(language, "pipeline.common.observedPrefix")}${s.trim()}`);
   if (data.context_match === "inconsistent") {
-    caveats.push("The described context doesn't visually match what's shown in the image.");
+    caveats.push(translate(language, "pipeline.image.contextInconsistent"));
   } else if (data.context_match === "consistent") {
-    caveats.push("What's visible in the image is at least plausible with the context described, though this is still only a visual read, not a confirmed match.");
+    caveats.push(translate(language, "pipeline.image.contextConsistent"));
   }
   if (verdict === "Out of Context" && keyEvidence.length === 0) {
     // Should be unreachable given the prompt instruction, but never let an
     // "Out of Context" verdict stand with zero cited evidence behind it —
     // downgrade defensively rather than surface an ungrounded claim.
-    return toResult({ ...data, verdict: "Inconclusive" }, engineVersion, allowedVerdicts, webPages);
+    return toResult({ ...data, verdict: "Inconclusive" }, engineVersion, allowedVerdicts, webPages, language);
   }
 
   return {
@@ -214,23 +225,25 @@ function toResult(
 export async function runImageQuickCheck(
   imageBase64: string,
   mimeType: string,
-  context: string | null
+  context: string | null,
+  language: Language = "en"
 ): Promise<ImageAnalysisResult> {
   const { data } = await callStructured<VisionOutput>({
     tier: "cheap",
-    systemPrompt: QUICK_SYSTEM_PROMPT,
+    systemPrompt: QUICK_SYSTEM_PROMPT + languageInstruction(language),
     userPrompt: buildUserPrompt(context, []),
     responseSchema: buildVisionSchema(BASE_VERDICTS),
     imageParts: [{ mimeType, data: imageBase64 }],
     timeoutMs: 20_000,
   });
-  return toResult(data, IMAGE_QUICK_ENGINE_VERSION, BASE_VERDICTS, []);
+  return toResult(data, IMAGE_QUICK_ENGINE_VERSION, BASE_VERDICTS, [], language);
 }
 
 export async function runImageDeepInvestigation(
   imageBase64: string,
   mimeType: string,
-  context: string | null
+  context: string | null,
+  language: Language = "en"
 ): Promise<ImageAnalysisResult> {
   // Fails open — a missing key or a Vision API error just means no web
   // evidence for this run, not a failed investigation (see
@@ -240,12 +253,12 @@ export async function runImageDeepInvestigation(
 
   const { data } = await callStructured<VisionOutput>({
     tier: "reasoning",
-    systemPrompt: DEEP_SYSTEM_PROMPT,
+    systemPrompt: DEEP_SYSTEM_PROMPT + languageInstruction(language),
     userPrompt: buildUserPrompt(context, webPages),
     responseSchema: buildVisionSchema(DEEP_VERDICTS),
     imageParts: [{ mimeType, data: imageBase64 }],
     timeoutMs: 25_000,
     fallbackModels: IMAGE_DEEP_FALLBACK_MODELS,
   });
-  return toResult(data, IMAGE_DEEP_ENGINE_VERSION, DEEP_VERDICTS, webPages);
+  return toResult(data, IMAGE_DEEP_ENGINE_VERSION, DEEP_VERDICTS, webPages, language);
 }

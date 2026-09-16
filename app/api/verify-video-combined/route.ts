@@ -3,6 +3,7 @@ import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runQuickCheck, normalizeClaim, ENGINE_VERSION, type QuickCheckResult } from "@/lib/quick-check";
 import { runVideoQuickCheck, VIDEO_QUICK_ENGINE_VERSION, type VideoAnalysisResult } from "@/lib/video-analysis";
+import { getUserLanguage } from "@/lib/user-language";
 import {
   downloadVideoFromStorage,
   uploadDownloadedVideoToGemini,
@@ -54,6 +55,14 @@ export const maxDuration = 300;
 // bytes: deletes both the Supabase Storage object and the Gemini File API
 // upload in a finally-equivalent cleanup, whether or not the request
 // succeeded.
+//
+// Sept 16, 2026 fast-follow: both the text half's cache namespace
+// ("video_transcript") and the video half's cache namespace ("video") are
+// now language-aware, same pattern as app/api/verify/route.ts and
+// app/api/verify-video/route.ts respectively — a transcript or video byte
+// content is language-independent, but the AI's returned summary/caveats
+// text isn't, so each language gets its own cache row. English keeps the
+// original, un-suffixed namespace so existing cache entries still hit.
 const ALLOWED_MIME_TYPES = new Set([
   "video/mp4",
   "video/quicktime",
@@ -99,8 +108,11 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+  const language = await getUserLanguage(admin, user.id);
+  const textCacheNamespace = language === "en" ? "video_transcript" : `video_transcript:${language}`;
+  const videoCacheNamespace = language === "en" ? "video" : `video:${language}`;
   const normalizedTranscript = normalizeClaim(transcript);
-  const textCacheKey = computeCacheKey(normalizedTranscript, "video_transcript", ENGINE_VERSION);
+  const textCacheKey = computeCacheKey(normalizedTranscript, textCacheNamespace, ENGINE_VERSION);
 
   const { data: remaining, error: rpcError } = await admin.rpc("decrement_quick_check", {
     p_user_id: user.id,
@@ -137,7 +149,7 @@ export async function POST(request: Request) {
 
   try {
     const { bytes, contentHash } = await downloadVideoFromStorage(admin, storagePath);
-    videoCacheKey = computeCacheKey(`sha256:${contentHash}|ctx:${context}`, "video", VIDEO_QUICK_ENGINE_VERSION);
+    videoCacheKey = computeCacheKey(`sha256:${contentHash}|ctx:${context}`, videoCacheNamespace, VIDEO_QUICK_ENGINE_VERSION);
 
     const [textCached, videoCached] = await Promise.all([
       getCachedVerification(admin, textCacheKey),
@@ -150,7 +162,7 @@ export async function POST(request: Request) {
 
     let textSemanticMatch: CachedVerification | null = null;
     if (!textCached) {
-      const semantic = await checkSemanticCache(admin, normalizedTranscript, "video_transcript", ENGINE_VERSION);
+      const semantic = await checkSemanticCache(admin, normalizedTranscript, textCacheNamespace, ENGINE_VERSION);
       textSemanticEmbedding = semantic.embedding;
       textSemanticMatch = semantic.match;
       if (textSemanticMatch) {
@@ -161,13 +173,13 @@ export async function POST(request: Request) {
     }
 
     const [freshText, freshVideo] = await Promise.all([
-      textCached || textSemanticMatch ? Promise.resolve(null) : runQuickCheck(transcript),
+      textCached || textSemanticMatch ? Promise.resolve(null) : runQuickCheck(transcript, language),
       videoCached
         ? Promise.resolve(null)
         : (async () => {
             const geminiFile = await uploadDownloadedVideoToGemini(bytes, mimeType);
             geminiFileName = geminiFile.name;
-            return runVideoQuickCheck(geminiFile.fileUri, mimeType, context || null);
+            return runVideoQuickCheck(geminiFile.fileUri, mimeType, context || null, language);
           })(),
     ]);
     textResult = textCached ?? textSemanticMatch ?? (freshText as QuickCheckResult);
@@ -262,7 +274,7 @@ export async function POST(request: Request) {
       await writeSemanticCache(
         admin,
         textSemanticEmbedding,
-        "video_transcript",
+        textCacheNamespace,
         ENGINE_VERSION,
         transcriptRow.id,
         normalizedTranscript,

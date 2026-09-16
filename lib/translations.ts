@@ -16,12 +16,28 @@
 // Coverage in this pass: the home screen, the sign-in/sign-up screen (incl.
 // the new language-picker step), the unified text/URL verify screen, and
 // the settings screen. The result page's static chrome (evidence/sources
-// labels, etc.) and every other input type's confirm screen (QR, image,
-// audio, video) are NOT yet wired to this dictionary — they still render
+// labels, etc.) is NOT yet wired to this dictionary — it still renders
 // English regardless of the user's stored preference. That's a deliberate,
-// explicitly-scoped gap for this first pass, not an oversight; extending
-// coverage to those screens is the natural next step once this mechanism
-// is confirmed working end to end.
+// explicitly-scoped gap, not an oversight.
+//
+// Sept 16, 2026 fast-follow: extended coverage to the video/audio/image
+// authenticity pipelines (lib/video-analysis.ts, lib/audio-analysis.ts,
+// lib/image-analysis.ts) after a real user reported that choosing Hindi
+// localized the plain-text Quick Check/Deep Investigation flow but NOT
+// these media pipelines — their `summary`/`caveats` output is built partly
+// from the model's own free text (now localized via each file's own
+// languageInstruction(), same pattern as quick-check.ts/
+// deep-investigation.ts) and partly from hardcoded English strings in code
+// (AI-generation labels, the fixed disclaimer, caveat sentences) — those
+// hardcoded pieces are the "pipeline.video.*"/"pipeline.audio.*"/
+// "pipeline.image.*"/"pipeline.common.*" keys added below. The
+// True/False/Misleading/Unverified/Scam and Clean/Suspicious/Inconclusive/
+// Out of Context verdict words themselves remain deliberately unlocalized
+// (same as this file's original Phase 1 decision for the text pipeline) —
+// they're short, fixed enum values the result page already styles/colors
+// by exact string match, and localizing them would require threading
+// translated labels through every verdict-comparison call site for a
+// cosmetic-only gain.
 export type Language = "en" | "hi";
 
 export const SUPPORTED_LANGUAGES: { code: Language; label: string; nativeLabel: string }[] = [
@@ -114,6 +130,29 @@ const en: Dictionary = {
   "nav.credits": "Credits",
   "pipeline.noEvidenceQuick": "No evidence could be found to check this claim against. Try rephrasing it or adding more specific detail.",
   "pipeline.noEvidenceDeep": "No evidence could be found across any of the angles this investigation looked into. Try rephrasing the claim or adding more specific detail.",
+  "pipeline.common.observedPrefix": "Observed: ",
+  "pipeline.common.noSignalsDescribed": "No specific signals were described.",
+  "pipeline.common.noExplanation": "No explanation was returned.",
+  "pipeline.video.summaryPrefix": "Manipulated/AI-generated:",
+  "pipeline.video.aiLikely": "Likely manipulated or AI-generated",
+  "pipeline.video.aiUnlikely": "Unlikely to be manipulated or AI-generated",
+  "pipeline.video.aiUncertain": "Uncertain whether this is manipulated or AI-generated",
+  "pipeline.video.disclaimer": "This is primarily a visual and audio read of the video itself — Vuryfy has no way to independently confirm who filmed this, when, or where. Deepfake and AI video generation tools keep improving, and a well-made fake can look convincing even on close review.",
+  "pipeline.video.caveatFace": "Top-tier deepfake/face-swap tools are built to hold up on a casual watch-through, including matched lighting and natural blinking — an \"unlikely\"/\"uncertain\" call here means no inconsistency was found either way, not that the face is confirmed real.",
+  "pipeline.video.caveatNoFace": "Top-tier AI video generators (Sora, Runway, Kling, Veo, and similar) are improving quickly at physical plausibility — an \"unlikely\"/\"uncertain\" call here means no inconsistency was found either way, not that the footage is confirmed to be real camera footage.",
+  "pipeline.video.contextInconsistent": "The described context doesn't visually match what's shown in the video.",
+  "pipeline.video.contextConsistent": "What's shown is at least plausible with the context described, though this is still only a watch-through, not a confirmed match.",
+  "pipeline.audio.summaryPrefix": "AI-generated:",
+  "pipeline.audio.aiLikely": "Likely AI-generated",
+  "pipeline.audio.aiUnlikely": "Unlikely to be AI-generated",
+  "pipeline.audio.aiUncertain": "Uncertain whether this is AI-generated",
+  "pipeline.audio.disclaimer": "This is primarily an audible read of the recording itself — Vuryfy has no way to independently confirm who recorded this, when, or where.",
+  "pipeline.audio.caveatSpeech": "Top-tier AI voice-cloning tools (ElevenLabs and similar) are built to sound indistinguishable from real speech, breath sounds and all — a listen-through like this one cannot reliably catch the best of them, so an \"unlikely\"/\"uncertain\" call here means no capture-environment evidence was found either way, not that the voice is confirmed human.",
+  "pipeline.audio.contextInconsistent": "The described context doesn't audibly match what's heard in the recording.",
+  "pipeline.audio.contextConsistent": "What's audible is at least plausible with the context described, though this is still only a listen-through, not a confirmed match.",
+  "pipeline.image.disclaimer": "This is primarily a visual read of the image itself — Vuryfy has no way to independently confirm who took this photo, when, or where, beyond what any cited web pages below actually say.",
+  "pipeline.image.contextInconsistent": "The described context doesn't visually match what's shown in the image.",
+  "pipeline.image.contextConsistent": "What's visible in the image is at least plausible with the context described, though this is still only a visual read, not a confirmed match.",
 };
 
 const hi: Dictionary = {
@@ -194,6 +233,29 @@ const hi: Dictionary = {
   "nav.credits": "क्रेडिट",
   "pipeline.noEvidenceQuick": "इस दावे की जांच के लिए कोई सबूत नहीं मिला। इसे दोबारा लिखने या अधिक विशेष जानकारी जोड़ने की कोशिश करें।",
   "pipeline.noEvidenceDeep": "इस जांच ने जिन भी पहलुओं को देखा, उनमें से किसी में भी कोई सबूत नहीं मिला। दावे को दोबारा लिखने या अधिक विशेष जानकारी जोड़ने की कोशिश करें।",
+  "pipeline.common.observedPrefix": "देखा गया: ",
+  "pipeline.common.noSignalsDescribed": "कोई विशेष संकेत नहीं बताया गया।",
+  "pipeline.common.noExplanation": "कोई स्पष्टीकरण नहीं मिला।",
+  "pipeline.video.summaryPrefix": "छेड़छाड़/AI-जनित:",
+  "pipeline.video.aiLikely": "संभवतः छेड़छाड़ की गई या AI-जनित",
+  "pipeline.video.aiUnlikely": "छेड़छाड़ या AI-जनित होने की संभावना नहीं",
+  "pipeline.video.aiUncertain": "यह छेड़छाड़ की गई है या AI-जनित है, यह अनिश्चित है",
+  "pipeline.video.disclaimer": "यह मुख्य रूप से वीडियो के दृश्य और ऑडियो का विश्लेषण है — वुर्यफाई के पास यह स्वतंत्र रूप से पुष्टि करने का कोई तरीका नहीं है कि इसे किसने, कब या कहाँ फिल्माया। डीपफेक और AI वीडियो जनरेशन टूल लगातार बेहतर हो रहे हैं, और एक बढ़िया नकली वीडियो बारीकी से देखने पर भी असली लग सकता है।",
+  "pipeline.video.caveatFace": "बेहतरीन डीपफेक/फेस-स्वैप टूल एक सामान्य नज़र में असली दिखने के लिए ही बनाए जाते हैं, जिसमें मेल खाती लाइटिंग और स्वाभाविक पलकें झपकाना शामिल है — यहाँ \"संभावना नहीं\"/\"अनिश्चित\" का मतलब है कि कोई असंगति नहीं मिली, न कि यह कि चेहरा असली होने की पुष्टि हो गई।",
+  "pipeline.video.caveatNoFace": "बेहतरीन AI वीडियो जनरेटर (Sora, Runway, Kling, Veo, और इसी तरह के) भौतिक यथार्थता में तेज़ी से बेहतर हो रहे हैं — यहाँ \"संभावना नहीं\"/\"अनिश्चित\" का मतलब है कि कोई असंगति नहीं मिली, न कि यह कि फुटेज असली कैमरा फुटेज होने की पुष्टि हो गई।",
+  "pipeline.video.contextInconsistent": "बताया गया संदर्भ वीडियो में दिखाए गए दृश्य से मेल नहीं खाता।",
+  "pipeline.video.contextConsistent": "जो दिखाया गया है वह बताए गए संदर्भ के साथ कम से कम प्रशंसनीय है, हालांकि यह अभी भी केवल एक नज़र है, पुष्टि किया गया मेल नहीं।",
+  "pipeline.audio.summaryPrefix": "AI-जनित:",
+  "pipeline.audio.aiLikely": "संभवतः AI-जनित",
+  "pipeline.audio.aiUnlikely": "AI-जनित होने की संभावना नहीं",
+  "pipeline.audio.aiUncertain": "यह AI-जनित है या नहीं, यह अनिश्चित है",
+  "pipeline.audio.disclaimer": "यह मुख्य रूप से रिकॉर्डिंग की ऑडियो जांच है — वुर्यफाई के पास यह स्वतंत्र रूप से पुष्टि करने का कोई तरीका नहीं है कि इसे किसने, कब या कहाँ रिकॉर्ड किया।",
+  "pipeline.audio.caveatSpeech": "बेहतरीन AI वॉइस-क्लोनिंग टूल (ElevenLabs और इसी तरह के) असली आवाज़ जैसी ही, सांस लेने की आवाज़ सहित, सुनाई देने के लिए बनाए जाते हैं — इस तरह की सुनवाई उनमें से सबसे बेहतरीन को भरोसे के साथ नहीं पकड़ सकती, इसलिए यहाँ \"संभावना नहीं\"/\"अनिश्चित\" का मतलब है कि रिकॉर्डिंग-माहौल का कोई सबूत नहीं मिला, न कि यह कि आवाज़ इंसानी होने की पुष्टि हो गई।",
+  "pipeline.audio.contextInconsistent": "बताया गया संदर्भ रिकॉर्डिंग में सुनाई देने वाली चीज़ से मेल नहीं खाता।",
+  "pipeline.audio.contextConsistent": "जो सुनाई देता है वह बताए गए संदर्भ के साथ कम से कम प्रशंसनीय है, हालांकि यह अभी भी केवल एक सुनवाई है, पुष्टि किया गया मेल नहीं।",
+  "pipeline.image.disclaimer": "यह मुख्य रूप से इमेज की दृश्य जांच है — वुर्यफाई के पास यह स्वतंत्र रूप से पुष्टि करने का कोई तरीका नहीं है कि यह फ़ोटो किसने, कब या कहाँ ली, नीचे बताए गए किसी भी वेब पेज की जानकारी से आगे।",
+  "pipeline.image.contextInconsistent": "बताया गया संदर्भ इमेज में दिखाए गए दृश्य से मेल नहीं खाता।",
+  "pipeline.image.contextConsistent": "इमेज में जो दिखाई देता है वह बताए गए संदर्भ के साथ कम से कम प्रशंसनीय है, हालांकि यह अभी भी केवल एक दृश्य जांच है, पुष्टि किया गया मेल नहीं।",
 };
 
 const DICTIONARIES: Record<Language, Dictionary> = { en, hi };

@@ -3,6 +3,7 @@ import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runVideoQuickCheck, VIDEO_QUICK_ENGINE_VERSION, type VideoAnalysisResult } from "@/lib/video-analysis";
 import { normalizeClaim } from "@/lib/quick-check";
+import { getUserLanguage } from "@/lib/user-language";
 import {
   downloadVideoFromStorage,
   uploadDownloadedVideoToGemini,
@@ -52,6 +53,13 @@ export const maxDuration = 300;
 // This route is the terminal step for these bytes on the "video itself"
 // path — it deletes BOTH the Supabase Storage object and the Gemini File
 // API upload in a finally block, whether or not the request succeeded.
+//
+// Sept 16, 2026 fast-follow: cache namespace is now language-aware (same
+// pattern as app/api/verify/route.ts) — the video bytes are the same
+// regardless of viewer language, but the returned summary/caveats text
+// differs by language, so a plain "video" namespace would let a Hindi
+// user get back an English-cached result (or vice versa). English keeps
+// the original, un-suffixed namespace so existing cache entries still hit.
 const ALLOWED_MIME_TYPES = new Set([
   "video/mp4",
   "video/quicktime",
@@ -87,6 +95,8 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+  const language = await getUserLanguage(admin, user.id);
+  const videoCacheNamespace = language === "en" ? "video" : `video:${language}`;
 
   const { data: remaining, error: rpcError } = await admin.rpc("decrement_quick_check", {
     p_user_id: user.id,
@@ -114,7 +124,7 @@ export async function POST(request: Request) {
 
   try {
     const { bytes, contentHash } = await downloadVideoFromStorage(admin, storagePath);
-    cacheKey = computeCacheKey(`sha256:${contentHash}|ctx:${context}`, "video", VIDEO_QUICK_ENGINE_VERSION);
+    cacheKey = computeCacheKey(`sha256:${contentHash}|ctx:${context}`, videoCacheNamespace, VIDEO_QUICK_ENGINE_VERSION);
 
     const cached = await getCachedVerification(admin, cacheKey);
     cacheHit = cached !== null;
@@ -124,7 +134,7 @@ export async function POST(request: Request) {
     } else {
       const geminiFile = await uploadDownloadedVideoToGemini(bytes, mimeType);
       geminiFileName = geminiFile.name;
-      result = await runVideoQuickCheck(geminiFile.fileUri, mimeType, context || null);
+      result = await runVideoQuickCheck(geminiFile.fileUri, mimeType, context || null, language);
     }
   } catch (err) {
     console.error("[verify-video] pipeline failed (refunding credit):", err);
