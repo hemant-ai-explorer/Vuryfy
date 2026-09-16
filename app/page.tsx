@@ -52,13 +52,17 @@ export default function Home() {
         </nav>
         <section className="hero">
           <p className="eyebrow">VERIFY WHAT MATTERS</p>
-          <h1>Know what to trust.</h1>
+          <h1>Know what to trust</h1>
           <p className="sub">
             Investigate claims and information with explainable AI-powered verification.
           </p>
           <Link className="primary-link" href="/login">
-            Sign in to start
+            Sign in or sign up
           </Link>
+          <p className="hint">
+            New to Vuryfy? Enter your phone number on the next screen — your account is created
+            automatically, no separate sign-up needed.
+          </p>
         </section>
       </main>
     );

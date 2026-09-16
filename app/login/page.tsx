@@ -62,8 +62,8 @@ export default function Login() {
         <div className="brand">Vuryfy</div>
       </nav>
       <section className="hero">
-        <p className="eyebrow">WELCOME BACK</p>
-        <h1>{otpSent ? "Enter your code." : "Sign in to Vuryfy."}</h1>
+        <p className="eyebrow">{otpSent ? "WELCOME" : "GET STARTED"}</p>
+        <h1>{otpSent ? "Enter your code." : "Sign in or sign up."}</h1>
         <p className="sub">
           {otpSent
             ? "Use the one-time code sent to your phone."
