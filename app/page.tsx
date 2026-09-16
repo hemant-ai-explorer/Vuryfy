@@ -73,15 +73,15 @@ export default function Home() {
         <p className="eyebrow">VURYFY</p>
         <h1>What do you want to verify?</h1>
         <p className="sub">
-          Start with a Quick Check for a fast answer, or run a Deep Investigation when you need a
-          more thorough examination.
+          Choose what you want to verify, then pick Quick Check for a fast answer or Deep
+          Investigation when you need a more thorough examination.
         </p>
         <div className="home-actions">
-          <Link className="primary-link" href="/verify">
-            Start a Quick Check
+          <Link className="primary-link" href="/verify/claim?type=text">
+            Verify Text
           </Link>
-          <Link className="secondary-link" href="/deep">
-            Start a Deep Investigation
+          <Link className="secondary-link" href="/verify/claim?type=url">
+            Verify URL/Claims
           </Link>
           <Link className="secondary-link" href="/verify/qr">
             Scan a QR Code
