@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { prepareAudioForUpload, type PreparedAudio } from "@/lib/prepare-audio-upload";
+import { useLanguage } from "@/app/providers/language-provider";
+import { parseJsonResponse } from "@/lib/safe-json";
 
 // Audio input — first half of the last step in the locked media-type build
 // order (text + link -> QR -> image -> audio/video), audio shipping ahead
@@ -37,6 +39,7 @@ import { prepareAudioForUpload, type PreparedAudio } from "@/lib/prepare-audio-u
 export default function VerifyAudioPage() {
   const router = useRouter();
   const supabase = createClient();
+  const { t } = useLanguage();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [processing, setProcessing] = useState(false);
@@ -71,7 +74,7 @@ export default function VerifyAudioPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ audio_base64: audio.base64, mime_type: audio.mimeType }),
       });
-      const d = await r.json();
+      const d = await parseJsonResponse(r);
       if (!r.ok) throw new Error(d.error || "Transcription failed");
       if (d.transcript) {
         setTranscript(d.transcript);
@@ -79,7 +82,7 @@ export default function VerifyAudioPage() {
         setNoSpeechFound(true);
       }
     } catch (e: any) {
-      setProcessError(e.message || "Couldn't process that audio file. Try a different file.");
+      setProcessError(e.message || t("audio.processError"));
     } finally {
       setProcessing(false);
     }
@@ -104,7 +107,7 @@ export default function VerifyAudioPage() {
           context: context.trim(),
         }),
       });
-      const d = await r.json();
+      const d = await parseJsonResponse(r);
       if (!r.ok) throw new Error(d.error || (mode === "quick" ? "Check failed" : "Investigation failed"));
       sessionStorage.setItem("vuryfy_result", JSON.stringify({ ...d, return_to: "/verify/audio" }));
       router.push(`/result?id=${d.id}`);
@@ -132,7 +135,7 @@ export default function VerifyAudioPage() {
           context: context.trim(),
         }),
       });
-      const d = await r.json();
+      const d = await parseJsonResponse(r);
       if (!r.ok) throw new Error(d.error || (mode === "quick" ? "Analysis failed" : "Investigation failed"));
       sessionStorage.setItem("vuryfy_result", JSON.stringify({ ...d, return_to: "/verify/audio" }));
       router.push(`/result?id=${d.id}`);
@@ -160,18 +163,14 @@ export default function VerifyAudioPage() {
     <main className="shell narrow">
       <nav>
         <button className="back" onClick={() => router.push("/")}>
-          ← Back
+          {t("nav.back")}
         </button>
-        <div className="credits">Credits</div>
+        <div className="credits">{t("nav.credits")}</div>
       </nav>
       <section className="verify">
-        <p className="eyebrow">AUDIO</p>
-        <h1>Check a recording.</h1>
-        <p className="sub">
-          Upload an audio file. If we can make out speech, we&apos;ll transcribe it so you can check
-          what&apos;s said, and we&apos;ll also listen to the recording itself for signs of AI voice
-          synthesis or splicing — both from the same check.
-        </p>
+        <p className="eyebrow">{t("audio.eyebrow")}</p>
+        <h1>{t("audio.heading")}</h1>
+        <p className="sub">{t("audio.sub")}</p>
 
         {!hasAudio && (
           <>
@@ -187,46 +186,40 @@ export default function VerifyAudioPage() {
               }}
             />
             <label htmlFor="audio-file" className="primary-link">
-              {processing ? "Processing…" : "Choose an audio file"}
+              {processing ? t("status.processing") : t("audio.chooseFile")}
             </label>
             {processError && <p className="error">{processError}</p>}
             <p className="hint">
-              Got a photo instead? <Link href="/verify/image">Check it</Link>
+              {t("audio.hintPhotoText")} <Link href="/verify/image">{t("hint.checkIt")}</Link>
             </p>
             <p className="hint">
-              Got a video instead? <Link href="/verify/video">Check it</Link>
+              {t("audio.hintVideoText")} <Link href="/verify/video">{t("hint.checkIt")}</Link>
             </p>
           </>
         )}
 
-        {hasAudio && processing && <p className="hint">Transcribing…</p>}
+        {hasAudio && processing && <p className="hint">{t("status.transcribing")}</p>}
 
         {hasAudio && !processing && transcript && (
           <div className="qr-decoded">
-            <span>TRANSCRIPT (EDIT IF NEEDED)</span>
+            <span>{t("transcript.badge")}</span>
             <textarea
               className="context-textarea"
               value={transcript}
               onChange={(e) => setTranscript(e.target.value)}
               maxLength={10000}
             />
-            <p className="hint">
-              We&apos;ll also listen to the recording itself for signs of AI voice synthesis or
-              splicing.
-            </p>
-            <p className="hint">
-              Quick Check gives a fast answer on both what&apos;s said and the recording itself.
-              Deep Investigation researches more thoroughly and takes longer.
-            </p>
+            <p className="hint">{t("audio.transcriptHint")}</p>
+            <p className="hint">{t("audio.combinedHint")}</p>
             <div className="result-actions">
               <button className="secondary" onClick={reset} disabled={anySubmitting}>
-                Choose another
+                {t("action.chooseAnother")}
               </button>
               <button className="secondary" onClick={() => submitCombined("deep")} disabled={anySubmitting}>
-                {submitting === "combined-deep" ? "Investigating…" : "Deep Investigation"}
+                {submitting === "combined-deep" ? t("claim.investigating") : t("claim.deepInvestigation")}
               </button>
               <button onClick={() => submitCombined("quick")} disabled={anySubmitting}>
-                {submitting === "combined-quick" ? "Checking…" : "Quick Check"}
+                {submitting === "combined-quick" ? t("claim.checking") : t("claim.quickCheck")}
               </button>
             </div>
             {submitError && <p className="error">{submitError}</p>}
@@ -235,32 +228,25 @@ export default function VerifyAudioPage() {
 
         {hasAudio && !processing && noSpeechFound && (
           <div className="qr-decoded">
-            <span>NO SPEECH FOUND</span>
-            <p>
-              We couldn&apos;t make out any spoken words in this recording — only the authenticity
-              check below is available for it.
-            </p>
-            <p className="hint">
-              We&apos;ll listen for signs of AI voice synthesis or splicing — not a source-verified
-              fact-check, just a listen-through. Optionally tell us what this recording is supposed
-              to be, and we&apos;ll note whether that sounds consistent.
-            </p>
+            <span>{t("noSpeech.badge")}</span>
+            <p>{t("audio.noSpeechBody")}</p>
+            <p className="hint">{t("audio.noSpeechHint")}</p>
             <textarea
               className="context-textarea"
               value={context}
               onChange={(e) => setContext(e.target.value)}
-              placeholder="What is this recording supposed to be? (optional)"
+              placeholder={t("audio.contextPlaceholder")}
               maxLength={500}
             />
             <div className="result-actions">
               <button className="secondary" onClick={reset} disabled={anySubmitting}>
-                Choose another
+                {t("action.chooseAnother")}
               </button>
               <button className="secondary" onClick={() => submitAudio("deep")} disabled={anySubmitting}>
-                {submitting === "audio-deep" ? "Investigating…" : "Deep Investigation"}
+                {submitting === "audio-deep" ? t("claim.investigating") : t("claim.deepInvestigation")}
               </button>
               <button onClick={() => submitAudio("quick")} disabled={anySubmitting}>
-                {submitting === "audio-quick" ? "Checking…" : "Quick Check"}
+                {submitting === "audio-quick" ? t("claim.checking") : t("claim.quickCheck")}
               </button>
             </div>
             {submitError && <p className="error">{submitError}</p>}

@@ -1,5 +1,6 @@
 import { search, type SearchResult } from "@/lib/search-gateway";
 import { callStructured } from "@/lib/ai-gateway";
+import { translate, LANGUAGE_NAMES, type Language } from "@/lib/translations";
 
 // Quick Check pipeline (Part 26.4, LOCKED): normalize -> search -> evaluate
 // evidence -> verdict. AI call count is 0 or 1 here (0 if search returns
@@ -115,6 +116,23 @@ const SYSTEM_PROMPT = `You are Vuryfy's claim-verification engine. You are given
 - summary should be 1-3 concise sentences a general reader can understand, explaining the verdict in plain language.
 Respond with only the requested JSON — no extra commentary, no markdown.`;
 
+// Output localization — Phase 1 of Part 11's locked multilingual design
+// (Sept 16, 2026, see lib/translations.ts's header for the full rationale
+// and current language coverage). Research and evidence retrieval stay
+// entirely in English regardless of the user's language (Part 11: "user
+// language -> canonical internal claim representation -> verification
+// (language-independent evidence engine) -> localized output") — only the
+// free-text `summary` field this model produces gets localized, via a
+// plain instruction appended to the system prompt rather than a second
+// translation pass, so there's no extra AI call or extra latency for this.
+// Evidence titles/snippets/URLs are never touched — those are direct
+// excerpts from real sources and translating them would misrepresent what
+// was actually found.
+function languageInstruction(language: Language): string {
+  if (language === "en") return "";
+  return `\n\nWrite the "summary" field in natural, fluent ${LANGUAGE_NAMES[language]}. Do not translate the claim itself, evidence titles, source names, or URLs — leave those exactly as given.`;
+}
+
 export function normalizeClaim(raw: string): string {
   return raw.trim().replace(/\s+/g, " ").slice(0, 2000);
 }
@@ -125,7 +143,7 @@ function buildEvidenceBlock(results: SearchResult[]): string {
     .join("\n\n");
 }
 
-export async function runQuickCheck(claimRaw: string): Promise<QuickCheckResult> {
+export async function runQuickCheck(claimRaw: string, language: Language = "en"): Promise<QuickCheckResult> {
   const claim = normalizeClaim(claimRaw);
 
   const results = await search(claim, { maxResults: 6 });
@@ -139,8 +157,7 @@ export async function runQuickCheck(claimRaw: string): Promise<QuickCheckResult>
     return {
       verdict: "Unverified",
       confidence: 0,
-      summary:
-        "No evidence could be found to check this claim against. Try rephrasing it or adding more specific detail.",
+      summary: translate(language, "pipeline.noEvidenceQuick"),
       key_evidence: [],
       sources: [],
       engine_version: ENGINE_VERSION,
@@ -151,7 +168,7 @@ export async function runQuickCheck(claimRaw: string): Promise<QuickCheckResult>
 
   const { data } = await callStructured<VerdictOutput>({
     tier: "cheap",
-    systemPrompt: SYSTEM_PROMPT,
+    systemPrompt: SYSTEM_PROMPT + languageInstruction(language),
     userPrompt,
     responseSchema: VERDICT_SCHEMA,
   });
@@ -166,7 +183,10 @@ export async function runQuickCheck(claimRaw: string): Promise<QuickCheckResult>
 
   const verdict = VALID_VERDICTS.includes(data.verdict) ? data.verdict : "Unverified";
   const confidence = Number.isFinite(data.confidence) ? Math.max(0, Math.min(100, Math.round(data.confidence))) : 0;
-  const summary = typeof data.summary === "string" && data.summary.trim() ? data.summary.trim() : "No explanation was returned.";
+  const summary =
+    typeof data.summary === "string" && data.summary.trim()
+      ? data.summary.trim()
+      : translate(language, "pipeline.noEvidenceQuick");
 
   return {
     verdict,

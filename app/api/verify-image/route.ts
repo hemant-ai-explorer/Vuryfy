@@ -3,6 +3,7 @@ import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runImageQuickCheck } from "@/lib/image-analysis";
 import { normalizeClaim } from "@/lib/quick-check";
+import { getUserLanguage } from "@/lib/user-language";
 
 // Route-level execution budget (Sept 2026 fix — see app/api/deep/route.ts's
 // comment for the full rationale). 60 is Hobby's max; without it Vercel's
@@ -41,6 +42,11 @@ export const maxDuration = 60;
 // passed straight through to the Gemini vision call, and is never written
 // to Supabase storage or any other persistence layer here — see lib/
 // image-analysis.ts for the full retention rationale.
+//
+// Sept 16, 2026 fast-follow: looks up the user's stored language
+// preference and passes it through to runImageQuickCheck so the AI's own
+// summary/signals_found (and the code-built disclaimer/caveats) come back
+// localized. No cache key change needed here — this pipeline is uncached.
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_BASE64_LENGTH = 8_000_000; // ~6MB binary — generous for a client-downscaled JPEG
 
@@ -70,6 +76,7 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+  const language = await getUserLanguage(admin, user.id);
 
   const { data: remaining, error: rpcError } = await admin.rpc("decrement_quick_check", {
     p_user_id: user.id,
@@ -92,7 +99,7 @@ export async function POST(request: Request) {
 
   let result;
   try {
-    result = await runImageQuickCheck(imageBase64, mimeType, context || null);
+    result = await runImageQuickCheck(imageBase64, mimeType, context || null, language);
   } catch (err) {
     console.error("[verify-image] pipeline failed (refunding credit):", err);
 

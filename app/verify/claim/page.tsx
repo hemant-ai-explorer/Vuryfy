@@ -1,0 +1,155 @@
+"use client";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+import { useLanguage } from "@/app/providers/language-provider";
+import { parseJsonResponse } from "@/lib/safe-json";
+
+// Unified text-entry confirm screen — Sept 16, 2026. Replaces the home
+// screen's old mode-first pair ("Start a Quick Check" / "Start a Deep
+// Investigation") with a content-type-first pair ("Verify Text" /
+// "Verify URL/Claims"), per the user's explicit request. This brings
+// text/link input in line with the standing cross-cutting pattern every
+// other input type (QR, image, audio, video) already follows: type/select
+// the content once, then choose Quick Check or Deep Investigation from
+// buttons on that same screen — see app/verify/qr/page.tsx's header for
+// where that pattern was first locked.
+//
+// "Verify Text" and "Verify URL/Claims" are two labeled entry points into
+// the exact same textarea and the exact same submission path (input_type
+// stays "text" for both, matching the pre-existing convention: the old
+// app/verify/page.tsx already accepted "a claim, statement, or URL" under
+// input_type "text", so a URL was never treated differently on the
+// backend — see lib/detect-payment-receipt.ts / detect-payment-request.ts
+// and the shared quick-check/deep-investigation pipelines, all of which
+// operate on "text-shaped input" regardless of this label).
+//
+// Localized Sept 16, 2026 (Phase 1 of the multilingual rollout, see
+// lib/translations.ts) — the per-type copy that used to live in a local
+// COPY table now comes from the shared dictionary via useLanguage()'s t(),
+// keyed by "claim.text*" / "claim.url*".
+//
+// The old app/verify/page.tsx (Quick-Check-only) and app/deep/page.tsx
+// (Deep-Investigation-only) are left in place, not deleted — they're no
+// longer linked from the home screen, but nothing else in the app links
+// to them either (confirmed via a full grep), so leaving them costs
+// nothing and avoids an unnecessary deletion via the device bridge, which
+// can't delete files on the user's machine directly.
+function ClaimForm() {
+  const router = useRouter();
+  const supabase = createClient();
+  const searchParams = useSearchParams();
+  const { t } = useLanguage();
+  const type: "text" | "url" = searchParams.get("type") === "url" ? "url" : "text";
+  const backHref = `/verify/claim?type=${type}`;
+
+  const copy =
+    type === "url"
+      ? {
+          eyebrow: t("claim.urlEyebrow"),
+          heading: t("claim.urlHeading"),
+          sub: t("claim.urlSub"),
+          placeholder: t("claim.urlPlaceholder"),
+        }
+      : {
+          eyebrow: t("claim.textEyebrow"),
+          heading: t("claim.textHeading"),
+          sub: t("claim.textSub"),
+          placeholder: t("claim.textPlaceholder"),
+        };
+
+  const [claim, setClaim] = useState("");
+  const [submitting, setSubmitting] = useState<"quick" | "deep" | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (!data.user) router.replace("/login");
+    });
+  }, [router, supabase]);
+
+  async function submit(mode: "quick" | "deep") {
+    if (claim.trim().length < 5) return;
+    setSubmitting(mode);
+    setError("");
+    try {
+      const endpoint = mode === "quick" ? "/api/verify" : "/api/deep";
+      const r = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ claim: claim.trim(), input_type: "text" }),
+      });
+      const d = await parseJsonResponse(r);
+      if (!r.ok) throw new Error(d.error || (mode === "quick" ? "Verification failed" : "Investigation failed"));
+      sessionStorage.setItem("vuryfy_result", JSON.stringify({ ...d, return_to: backHref }));
+      router.push(`/result?id=${d.id}`);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setSubmitting(null);
+    }
+  }
+
+  return (
+    <main className="shell narrow">
+      <nav>
+        <button className="back" onClick={() => router.push("/")}>
+          {t("nav.back")}
+        </button>
+        <div className="credits">{t("nav.credits")}</div>
+      </nav>
+      <section className="verify">
+        <p className="eyebrow">{copy.eyebrow}</p>
+        <h1>{copy.heading}</h1>
+        <p className="sub">{copy.sub}</p>
+        <textarea
+          value={claim}
+          onChange={(e) => setClaim(e.target.value)}
+          placeholder={copy.placeholder}
+          maxLength={10000}
+        />
+        <div className="actions">
+          <span>{claim.length}/10,000</span>
+        </div>
+        <div className="result-actions">
+          <button
+            className="secondary"
+            onClick={() => submit("deep")}
+            disabled={!!submitting || claim.trim().length < 5}
+          >
+            {submitting === "deep" ? t("claim.investigating") : t("claim.deepInvestigation")}
+          </button>
+          <button onClick={() => submit("quick")} disabled={!!submitting || claim.trim().length < 5}>
+            {submitting === "quick" ? t("claim.checking") : t("claim.quickCheck")}
+          </button>
+        </div>
+        {error && <p className="error">{error}</p>}
+        <p className="hint">
+          {t("claim.hintQrText")} <Link href="/verify/qr">{t("claim.hintQrLink")}</Link>
+        </p>
+        <p className="hint">
+          {t("claim.hintPhotoText")} <Link href="/verify/image">{t("claim.hintPhotoLink")}</Link>
+        </p>
+        <p className="hint">
+          {t("claim.hintAudioText")} <Link href="/verify/audio">{t("claim.hintAudioLink")}</Link>
+        </p>
+        <p className="hint">
+          {t("claim.hintVideoText")} <Link href="/verify/video">{t("claim.hintVideoLink")}</Link>
+        </p>
+      </section>
+    </main>
+  );
+}
+
+// useSearchParams() requires a Suspense boundary at build time (the same
+// Vercel build failure hit and fixed for the old /deep/status page — see
+// architecture-decisions.md's "Bugs found in the existing local code"
+// entry — applied here proactively rather than discovered at deploy time.
+export default function VerifyClaimPage() {
+  return (
+    <Suspense fallback={null}>
+      <ClaimForm />
+    </Suspense>
+  );
+}

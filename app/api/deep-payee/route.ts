@@ -3,6 +3,7 @@ import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runDeepInvestigation, DEEP_ENGINE_VERSION, type DeepInvestigationResult } from "@/lib/deep-investigation";
 import { normalizeClaim } from "@/lib/quick-check";
+import { getUserLanguage } from "@/lib/user-language";
 import {
   computeCacheKey,
   getCachedVerification,
@@ -33,6 +34,11 @@ export const maxDuration = 60;
 // produces, rather than replacing them, since a Deep Investigation result
 // can have genuinely useful caveats of its own (contradictory sources,
 // stale information, etc.).
+//
+// Sept 16, 2026 fast-follow: reuses lib/deep-investigation.ts's own output
+// localization — see app/api/verify-payee/route.ts's identical comment
+// for the full rationale, including the note that this file's own
+// DISCLAIMER caveat isn't yet localized.
 const DISCLAIMER =
   "This searches the public web for reports about this payee — it can't confirm who actually controls the payment ID, and finding nothing doesn't mean they're legitimate. Most real businesses and most scammers alike often have little to no searchable footprint.";
 
@@ -62,9 +68,11 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+  const language = await getUserLanguage(admin, user.id);
+  const cacheNamespace = language === "en" ? "payee_reputation" : `payee_reputation:${language}`;
   const searchClaim = buildPayeeClaim(payeeName, upiId);
   const normalizedClaim = normalizeClaim(searchClaim);
-  const cacheKey = computeCacheKey(normalizedClaim, "payee_reputation", DEEP_ENGINE_VERSION);
+  const cacheKey = computeCacheKey(normalizedClaim, cacheNamespace, DEEP_ENGINE_VERSION);
   const displayClaim = payeeName ? `${payeeName} — ${upiId}` : upiId;
 
   const { data: remaining, error: rpcError } = await admin.rpc("decrement_deep_investigation", {
@@ -94,7 +102,7 @@ export async function POST(request: Request) {
   let semanticMatch: CachedVerification | null = null;
 
   if (!cached) {
-    const semantic = await checkSemanticCache(admin, normalizedClaim, "payee_reputation", DEEP_ENGINE_VERSION);
+    const semantic = await checkSemanticCache(admin, normalizedClaim, cacheNamespace, DEEP_ENGINE_VERSION);
     semanticEmbedding = semantic.embedding;
     semanticMatch = semantic.match;
     if (semanticMatch) {
@@ -110,7 +118,7 @@ export async function POST(request: Request) {
     result = semanticMatch;
   } else {
     try {
-      result = await runDeepInvestigation(searchClaim);
+      result = await runDeepInvestigation(searchClaim, language);
     } catch (err) {
       console.error("[deep-payee] pipeline failed (refunding credit):", err);
 
@@ -172,7 +180,7 @@ export async function POST(request: Request) {
       await writeSemanticCache(
         admin,
         semanticEmbedding,
-        "payee_reputation",
+        cacheNamespace,
         DEEP_ENGINE_VERSION,
         verification.id,
         normalizedClaim,

@@ -12,6 +12,7 @@ import {
 } from "@/lib/verification-cache";
 import { detectPaymentReceipt } from "@/lib/detect-payment-receipt";
 import { detectPaymentRequest } from "@/lib/detect-payment-request";
+import { getUserLanguage } from "@/lib/user-language";
 
 // Route-level execution budget (Sept 2026 fix, added across every AI-
 // calling route after the video-upload 413 investigation surfaced that
@@ -151,8 +152,23 @@ export async function POST(request: Request) {
     });
   }
 
+  // Output localization (Phase 1 of the multilingual rollout, Sept 16,
+  // 2026 — see lib/translations.ts's header). The user's stored language
+  // preference is looked up server-side (never trusted from the request
+  // body) and namespaces the cache alongside input_type/engine_version, so
+  // a Hindi-localized result is never served to an English-preference user
+  // or vice versa. English keeps the exact same cache namespace it always
+  // had (cacheNamespace === inputType when language is "en"), so this
+  // introduces zero cache invalidation for the vast majority of existing
+  // traffic — only Hindi gets a distinct namespace. This only affects the
+  // CACHE key; the `verifications.input_type` column written below stays
+  // the original clean value, since that column has its own check
+  // constraint and is unrelated to language.
+  const language = await getUserLanguage(admin, user.id);
+  const cacheNamespace = language === "en" ? inputType : `${inputType}:${language}`;
+
   const normalizedClaim = normalizeClaim(claim);
-  const cacheKey = computeCacheKey(normalizedClaim, inputType, ENGINE_VERSION);
+  const cacheKey = computeCacheKey(normalizedClaim, cacheNamespace, ENGINE_VERSION);
 
   // Atomic conditional decrement via the decrement_quick_check() Postgres
   // function (see supabase/migrations/0001_init.sql) — only succeeds if
@@ -192,7 +208,7 @@ export async function POST(request: Request) {
   let semanticMatch: CachedVerification | null = null;
 
   if (!cached) {
-    const semantic = await checkSemanticCache(admin, normalizedClaim, inputType, ENGINE_VERSION);
+    const semantic = await checkSemanticCache(admin, normalizedClaim, cacheNamespace, ENGINE_VERSION);
     semanticEmbedding = semantic.embedding;
     semanticMatch = semantic.match;
     if (semanticMatch) {
@@ -208,7 +224,7 @@ export async function POST(request: Request) {
     result = semanticMatch;
   } else {
     try {
-      result = await runQuickCheck(claim);
+      result = await runQuickCheck(claim, language);
     } catch (err) {
       console.error("[verify] Quick Check pipeline failed (refunding credit):", err);
 
@@ -295,7 +311,7 @@ export async function POST(request: Request) {
   if (!cacheHit) {
     await writeCache(admin, cacheKey, verification.id, claim);
     if (semanticEmbedding) {
-      await writeSemanticCache(admin, semanticEmbedding, inputType, ENGINE_VERSION, verification.id, normalizedClaim, claim);
+      await writeSemanticCache(admin, semanticEmbedding, cacheNamespace, ENGINE_VERSION, verification.id, normalizedClaim, claim);
     }
   }
 

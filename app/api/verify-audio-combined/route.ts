@@ -3,6 +3,8 @@ import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runQuickCheck, normalizeClaim, ENGINE_VERSION, type QuickCheckResult } from "@/lib/quick-check";
 import { runAudioQuickCheck, AUDIO_QUICK_ENGINE_VERSION, type AudioAnalysisResult } from "@/lib/audio-analysis";
+import { getUserLanguage } from "@/lib/user-language";
+import { translate } from "@/lib/translations";
 import {
   computeCacheKey,
   getCachedVerification,
@@ -63,6 +65,10 @@ export const maxDuration = 60;
 //     resubmitted skips the Gemini listen-through.
 // Both cache lookups are independent of the flat 1-credit charge — a
 // double cache hit still costs 1 credit, same as a double cache miss.
+//
+// Sept 16, 2026 fast-follow: both cache namespaces ("audio_transcript" and
+// "audio") are now language-aware, same pattern as app/api/verify/
+// route.ts and app/api/verify-audio/route.ts respectively.
 const ALLOWED_MIME_TYPES = new Set([
   "audio/mpeg",
   "audio/mp3",
@@ -115,9 +121,12 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+  const language = await getUserLanguage(admin, user.id);
+  const textCacheNamespace = language === "en" ? "audio_transcript" : `audio_transcript:${language}`;
+  const audioCacheNamespace = language === "en" ? "audio" : `audio:${language}`;
   const normalizedTranscript = normalizeClaim(transcript);
-  const textCacheKey = computeCacheKey(normalizedTranscript, "audio_transcript", ENGINE_VERSION);
-  const audioCacheKey = computeCacheKey(`${audioBase64}|ctx:${context}`, "audio", AUDIO_QUICK_ENGINE_VERSION);
+  const textCacheKey = computeCacheKey(normalizedTranscript, textCacheNamespace, ENGINE_VERSION);
+  const audioCacheKey = computeCacheKey(`${audioBase64}|ctx:${context}`, audioCacheNamespace, AUDIO_QUICK_ENGINE_VERSION);
 
   const { data: remaining, error: rpcError } = await admin.rpc("decrement_quick_check", {
     p_user_id: user.id,
@@ -154,7 +163,7 @@ export async function POST(request: Request) {
   let textSemanticEmbedding: number[] | null = null;
   let textSemanticMatch: CachedVerification | null = null;
   if (!textCached) {
-    const semantic = await checkSemanticCache(admin, normalizedTranscript, "audio_transcript", ENGINE_VERSION);
+    const semantic = await checkSemanticCache(admin, normalizedTranscript, textCacheNamespace, ENGINE_VERSION);
     textSemanticEmbedding = semantic.embedding;
     textSemanticMatch = semantic.match;
     if (textSemanticMatch) {
@@ -167,8 +176,8 @@ export async function POST(request: Request) {
   let audioResult: AudioAnalysisResult | CachedVerification;
   try {
     const [freshText, freshAudio] = await Promise.all([
-      textCached || textSemanticMatch ? Promise.resolve(null) : runQuickCheck(transcript),
-      audioCached ? Promise.resolve(null) : runAudioQuickCheck(audioBase64, mimeType, context || null),
+      textCached || textSemanticMatch ? Promise.resolve(null) : runQuickCheck(transcript, language),
+      audioCached ? Promise.resolve(null) : runAudioQuickCheck(audioBase64, mimeType, context || null, language),
     ]);
     textResult = textCached ?? textSemanticMatch ?? (freshText as QuickCheckResult);
     audioResult = audioCached ?? (freshAudio as AudioAnalysisResult);
@@ -255,7 +264,7 @@ export async function POST(request: Request) {
       await writeSemanticCache(
         admin,
         textSemanticEmbedding,
-        "audio_transcript",
+        textCacheNamespace,
         ENGINE_VERSION,
         transcriptRow.id,
         normalizedTranscript,
@@ -301,7 +310,7 @@ export async function POST(request: Request) {
     secondary: audioRow
       ? {
           id: audioRow.id,
-          eyebrow: "THE RECORDING ITSELF",
+          eyebrow: translate(language, "result.eyebrowRecording"),
           verdict: audioRow.verdict,
           confidence: audioRow.confidence,
           explanation: audioRow.summary,

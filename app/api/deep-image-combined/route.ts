@@ -6,6 +6,8 @@ import { normalizeClaim } from "@/lib/quick-check";
 import { runImageDeepInvestigation, type ImageAnalysisResult } from "@/lib/image-analysis";
 import { computeCacheKey, getCachedVerification, writeCache, type CachedVerification } from "@/lib/verification-cache";
 import { detectPaymentReceipt } from "@/lib/detect-payment-receipt";
+import { getUserLanguage } from "@/lib/user-language";
+import { translate } from "@/lib/translations";
 
 // Route-level execution budget (Sept 2026 fix — see app/api/deep/route.ts's
 // comment for the full rationale). This route runs two AI pipelines in
@@ -24,6 +26,11 @@ export const maxDuration = 60;
 // (Deep Investigation's text pipeline produces caveats; Quick Check's
 // doesn't — see app/api/deep/route.ts vs app/api/verify/route.ts for the
 // same asymmetry elsewhere in the app).
+//
+// Sept 16, 2026 fast-follow: the text half's cache namespace is now
+// language-aware, and the vision half now gets the user's language passed
+// through — see app/api/verify-image-combined/route.ts's identical
+// comment.
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_BASE64_LENGTH = 8_000_000;
 
@@ -86,8 +93,10 @@ export async function POST(request: Request) {
     });
   }
 
+  const language = await getUserLanguage(admin, user.id);
+  const textCacheNamespace = language === "en" ? "image_ocr" : `image_ocr:${language}`;
   const normalizedOcr = normalizeClaim(ocrText);
-  const textCacheKey = computeCacheKey(normalizedOcr, "image_ocr", DEEP_ENGINE_VERSION);
+  const textCacheKey = computeCacheKey(normalizedOcr, textCacheNamespace, DEEP_ENGINE_VERSION);
 
   const { data: remaining, error: rpcError } = await admin.rpc("decrement_deep_investigation", {
     p_user_id: user.id,
@@ -114,8 +123,8 @@ export async function POST(request: Request) {
   let imageResult: ImageAnalysisResult;
   try {
     const [freshText, freshImage] = await Promise.all([
-      textCached ? Promise.resolve(null) : runDeepInvestigation(ocrText),
-      runImageDeepInvestigation(imageBase64, mimeType, context || null),
+      textCached ? Promise.resolve(null) : runDeepInvestigation(ocrText, language),
+      runImageDeepInvestigation(imageBase64, mimeType, context || null, language),
     ]);
     textResult = textCached ?? (freshText as DeepInvestigationResult);
     imageResult = freshImage as ImageAnalysisResult;
@@ -234,7 +243,7 @@ export async function POST(request: Request) {
     secondary: imageRow
       ? {
           id: imageRow.id,
-          eyebrow: "THE PHOTO ITSELF",
+          eyebrow: translate(language, "result.eyebrowPhoto"),
           verdict: imageRow.verdict,
           confidence: imageRow.confidence,
           explanation: imageRow.summary,

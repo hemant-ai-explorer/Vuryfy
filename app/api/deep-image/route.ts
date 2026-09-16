@@ -3,6 +3,7 @@ import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runImageDeepInvestigation } from "@/lib/image-analysis";
 import { normalizeClaim } from "@/lib/quick-check";
+import { getUserLanguage } from "@/lib/user-language";
 
 // Route-level execution budget (Sept 2026 fix — see app/api/deep/route.ts's
 // comment for the full rationale). 60 is Hobby's max; without it Vercel's
@@ -19,6 +20,10 @@ export const maxDuration = 60;
 // pass — there is no web evidence to gather for a raw photo the way there
 // is for a decomposed text claim, so "deeper" here means a slower, more
 // careful look at the same image, not more AI calls.
+//
+// Sept 16, 2026 fast-follow: looks up the user's stored language
+// preference and passes it through to runImageDeepInvestigation — see
+// app/api/verify-image/route.ts's identical comment.
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_BASE64_LENGTH = 8_000_000;
 
@@ -48,6 +53,7 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+  const language = await getUserLanguage(admin, user.id);
 
   const { data: remaining, error: rpcError } = await admin.rpc("decrement_deep_investigation", {
     p_user_id: user.id,
@@ -70,7 +76,7 @@ export async function POST(request: Request) {
 
   let result;
   try {
-    result = await runImageDeepInvestigation(imageBase64, mimeType, context || null);
+    result = await runImageDeepInvestigation(imageBase64, mimeType, context || null, language);
   } catch (err) {
     console.error("[deep-image] pipeline failed (refunding credit):", err);
 

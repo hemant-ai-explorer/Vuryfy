@@ -1,5 +1,6 @@
 import { callStructured } from "@/lib/ai-gateway";
 import type { QuickCheckEvidence } from "@/lib/quick-check";
+import { translate, LANGUAGE_NAMES, type Language } from "@/lib/translations";
 
 // Video authenticity analysis — the second half of video input (the first
 // half, transcript-based fact-checking, reuses quick-check.ts/
@@ -67,6 +68,20 @@ import type { QuickCheckEvidence } from "@/lib/quick-check";
 // Caching: reuses the same exact-match cache as audio (keyed on the video
 // content itself, not a text claim) — see app/api/verify-video/route.ts.
 // Not integrated by this file directly, same separation as audio-analysis.ts.
+//
+// Output localization (Sept 16, 2026 fast-follow — see lib/translations.ts's
+// header for the full rationale): a `language` parameter, defaulting to
+// "en" for backward compatibility, drives two things — (1) a prompt
+// instruction telling the model to write its own free-text fields
+// (summary, ai_generated_reasoning, signals_found) in that language, same
+// mechanism as quick-check.ts/deep-investigation.ts's languageInstruction;
+// and (2) every hardcoded English string this file builds in code (the
+// AI-generation labels, the disclaimer, the caveat sentences) now goes
+// through translate() instead of a literal string, so a Hindi user gets a
+// fully Hindi result rather than a Hindi-flavored summary sandwiched
+// between English scaffolding. The verdict enum itself ("Clean"/
+// "Suspicious"/"Inconclusive") stays English — see translations.ts's header
+// for why.
 
 export const VIDEO_QUICK_ENGINE_VERSION = "v1-gemini-video-quick";
 // Sept 15, 2026: bumped v1 -> v2. Not a prompt/schema change — the
@@ -152,6 +167,15 @@ const QUICK_SYSTEM_PROMPT = `You are Vuryfy's video Quick Check engine, giving a
 
 const DEEP_SYSTEM_PROMPT = `You are Vuryfy's video Deep Investigation engine, giving a slower, more thorough frame-by-frame review than a Quick Check. Look carefully across the whole clip — facial edge/lighting consistency if a face is present, object permanence and physics throughout, shadow/reflection consistency as the scene moves, camera noise/grain naturalness, any abrupt cuts or audio-video desync, and any artifacts typical of face-swap deepfakes or AI video generation. ${HONESTY_RULES}`;
 
+// Output localization (Sept 16, 2026) — mirrors quick-check.ts's
+// languageInstruction() exactly, just naming this file's own free-text
+// fields. signals_found is included since it's genuinely free text
+// describing what was observed, not a fixed vocabulary.
+function languageInstruction(language: Language): string {
+  if (language === "en") return "";
+  return `\n\nWrite the "summary" and "ai_generated_reasoning" fields, and each item in "signals_found", in natural, fluent ${LANGUAGE_NAMES[language]}.`;
+}
+
 function buildUserPrompt(context: string | null): string {
   const contextLine = context && context.trim().length > 0
     ? `Context the user provided about what this video is supposed to show:\n"${context.trim()}"\n\n`
@@ -159,17 +183,13 @@ function buildUserPrompt(context: string | null): string {
   return `${contextLine}Analyze the attached video.`;
 }
 
-// Code-enforced disclaimer, same pattern as image-analysis.ts / audio-analysis.ts.
-const DISCLAIMER =
-  "This is primarily a visual and audio read of the video itself — Vuryfy has no way to independently confirm who filmed this, when, or where. Deepfake and AI video generation tools keep improving, and a well-made fake can look convincing even on close review.";
-
-const AI_LABELS: Record<string, string> = {
-  likely: "Likely manipulated or AI-generated",
-  unlikely: "Unlikely to be manipulated or AI-generated",
-  uncertain: "Uncertain whether this is manipulated or AI-generated",
+const AI_LABEL_KEYS: Record<string, string> = {
+  likely: "pipeline.video.aiLikely",
+  unlikely: "pipeline.video.aiUnlikely",
+  uncertain: "pipeline.video.aiUncertain",
 };
 
-function toResult(data: VideoOutput, engineVersion: string): VideoAnalysisResult {
+function toResult(data: VideoOutput, engineVersion: string, language: Language): VideoAnalysisResult {
   let verdict = VERDICTS.includes(data.verdict) ? data.verdict : "Inconclusive";
   const confidence = Number.isFinite(data.confidence) ? Math.max(0, Math.min(100, Math.round(data.confidence))) : 0;
   const aiLikelihood = AI_LIKELIHOODS.includes(data.ai_generated_likelihood)
@@ -178,9 +198,11 @@ function toResult(data: VideoOutput, engineVersion: string): VideoAnalysisResult
   const aiReasoning =
     typeof data.ai_generated_reasoning === "string" && data.ai_generated_reasoning.trim()
       ? data.ai_generated_reasoning.trim()
-      : "No specific signals were described.";
+      : translate(language, "pipeline.common.noSignalsDescribed");
   const generalSummary =
-    typeof data.summary === "string" && data.summary.trim() ? data.summary.trim() : "No explanation was returned.";
+    typeof data.summary === "string" && data.summary.trim()
+      ? data.summary.trim()
+      : translate(language, "pipeline.common.noExplanation");
   const signals = Array.isArray(data.signals_found)
     ? data.signals_found.filter((s) => typeof s === "string" && s.trim().length > 0)
     : [];
@@ -206,24 +228,20 @@ function toResult(data: VideoOutput, engineVersion: string): VideoAnalysisResult
   // so it leads the summary (the "WHY" section — the most prominent text on
   // the result screen) rather than being left implicit in signals_found or
   // buried in the caveats list below.
-  const summary = `Manipulated/AI-generated: ${AI_LABELS[aiLikelihood]}. ${aiReasoning} ${generalSummary}`.trim();
+  const summary = `${translate(language, "pipeline.video.summaryPrefix")} ${translate(language, AI_LABEL_KEYS[aiLikelihood])}. ${aiReasoning} ${generalSummary}`.trim();
 
-  const caveats: string[] = [DISCLAIMER];
+  const caveats: string[] = [translate(language, "pipeline.video.disclaimer")];
   if (data.contains_face && aiLikelihood !== "likely") {
-    caveats.push(
-      "Top-tier deepfake/face-swap tools are built to hold up on a casual watch-through, including matched lighting and natural blinking — an \"unlikely\"/\"uncertain\" call here means no inconsistency was found either way, not that the face is confirmed real."
-    );
+    caveats.push(translate(language, "pipeline.video.caveatFace"));
   }
   if (!data.contains_face && aiLikelihood !== "likely") {
-    caveats.push(
-      "Top-tier AI video generators (Sora, Runway, Kling, Veo, and similar) are improving quickly at physical plausibility — an \"unlikely\"/\"uncertain\" call here means no inconsistency was found either way, not that the footage is confirmed to be real camera footage."
-    );
+    caveats.push(translate(language, "pipeline.video.caveatNoFace"));
   }
-  for (const s of signals) caveats.push(`Observed: ${s.trim()}`);
+  for (const s of signals) caveats.push(`${translate(language, "pipeline.common.observedPrefix")}${s.trim()}`);
   if (data.context_match === "inconsistent") {
-    caveats.push("The described context doesn't visually match what's shown in the video.");
+    caveats.push(translate(language, "pipeline.video.contextInconsistent"));
   } else if (data.context_match === "consistent") {
-    caveats.push("What's shown is at least plausible with the context described, though this is still only a watch-through, not a confirmed match.");
+    caveats.push(translate(language, "pipeline.video.contextConsistent"));
   }
 
   return {
@@ -247,17 +265,18 @@ function toResult(data: VideoOutput, engineVersion: string): VideoAnalysisResult
 export async function runVideoQuickCheck(
   fileUri: string,
   mimeType: string,
-  context: string | null
+  context: string | null,
+  language: Language = "en"
 ): Promise<VideoAnalysisResult> {
   const { data } = await callStructured<VideoOutput>({
     tier: "cheap",
-    systemPrompt: QUICK_SYSTEM_PROMPT,
+    systemPrompt: QUICK_SYSTEM_PROMPT + languageInstruction(language),
     userPrompt: buildUserPrompt(context),
     responseSchema: VIDEO_SCHEMA,
     videoFileRef: { fileUri, mimeType },
     timeoutMs: 120_000,
   });
-  return toResult(data, VIDEO_QUICK_ENGINE_VERSION);
+  return toResult(data, VIDEO_QUICK_ENGINE_VERSION, language);
 }
 
 // Sept 15, 2026: timeoutMs raised again, 150s -> 300s, after a real live
@@ -304,11 +323,12 @@ const VIDEO_DEEP_FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-l
 export async function runVideoDeepInvestigation(
   fileUri: string,
   mimeType: string,
-  context: string | null
+  context: string | null,
+  language: Language = "en"
 ): Promise<VideoAnalysisResult> {
   const { data } = await callStructured<VideoOutput>({
     tier: "reasoning",
-    systemPrompt: DEEP_SYSTEM_PROMPT,
+    systemPrompt: DEEP_SYSTEM_PROMPT + languageInstruction(language),
     userPrompt: buildUserPrompt(context),
     responseSchema: VIDEO_SCHEMA,
     videoFileRef: { fileUri, mimeType },
@@ -316,5 +336,5 @@ export async function runVideoDeepInvestigation(
     retryDelaysMs: VIDEO_DEEP_RETRY_DELAYS_MS,
     fallbackModels: VIDEO_DEEP_FALLBACK_MODELS,
   });
-  return toResult(data, VIDEO_DEEP_ENGINE_VERSION);
+  return toResult(data, VIDEO_DEEP_ENGINE_VERSION, language);
 }

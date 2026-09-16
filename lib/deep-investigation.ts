@@ -1,6 +1,7 @@
 import { search, type SearchResult } from "@/lib/search-gateway";
 import { callStructured } from "@/lib/ai-gateway";
 import { normalizeClaim, type QuickCheckEvidence } from "@/lib/quick-check";
+import { translate, LANGUAGE_NAMES, type Language } from "@/lib/translations";
 
 // Deep Investigation pipeline (Part 11 routing logic + Part 26.5, LOCKED
 // shape carried over from the old FastAPI reference implementation):
@@ -140,7 +141,22 @@ function buildEvidenceBlock(results: SearchResult[]): string {
     .join("\n\n");
 }
 
-export async function runDeepInvestigation(claimRaw: string): Promise<DeepInvestigationResult> {
+// Output localization — same principle and same rationale as
+// lib/quick-check.ts's identical helper: research/evidence stay in
+// English, only the free-text `summary` and `caveats` fields this model
+// produces get localized via a system-prompt instruction. The decompose
+// step's sub-questions are deliberately left in English regardless of
+// language, since they're only ever used internally to drive search
+// queries and are never shown to the user.
+function languageInstruction(language: Language): string {
+  if (language === "en") return "";
+  return `\n\nWrite the "summary" field and every string inside "caveats" in natural, fluent ${LANGUAGE_NAMES[language]}. Do not translate the claim itself, evidence titles, source names, or URLs — leave those exactly as given.`;
+}
+
+export async function runDeepInvestigation(
+  claimRaw: string,
+  language: Language = "en"
+): Promise<DeepInvestigationResult> {
   const claim = normalizeClaim(claimRaw);
 
   // Step 1: decompose into sub-questions (cheap tier). Falls back to
@@ -195,8 +211,7 @@ export async function runDeepInvestigation(claimRaw: string): Promise<DeepInvest
     return {
       verdict: "Unverified",
       confidence: 0,
-      summary:
-        "No evidence could be found across any of the angles this investigation looked into. Try rephrasing the claim or adding more specific detail.",
+      summary: translate(language, "pipeline.noEvidenceDeep"),
       key_evidence: [],
       sources: [],
       caveats: [],
@@ -211,7 +226,7 @@ export async function runDeepInvestigation(claimRaw: string): Promise<DeepInvest
 
   const { data } = await callStructured<SynthesisOutput>({
     tier: "reasoning",
-    systemPrompt: SYNTHESIS_SYSTEM_PROMPT,
+    systemPrompt: SYNTHESIS_SYSTEM_PROMPT + languageInstruction(language),
     userPrompt,
     responseSchema: SYNTHESIS_SCHEMA,
     fallbackModels: SYNTHESIS_FALLBACK_MODELS,
@@ -229,7 +244,10 @@ export async function runDeepInvestigation(claimRaw: string): Promise<DeepInvest
 
   const verdict = VALID_VERDICTS.includes(data.verdict) ? data.verdict : "Unverified";
   const confidence = Number.isFinite(data.confidence) ? Math.max(0, Math.min(100, Math.round(data.confidence))) : 0;
-  const summary = typeof data.summary === "string" && data.summary.trim() ? data.summary.trim() : "No explanation was returned.";
+  const summary =
+    typeof data.summary === "string" && data.summary.trim()
+      ? data.summary.trim()
+      : translate(language, "pipeline.noEvidenceDeep");
   const caveats = Array.isArray(data.caveats) ? data.caveats.filter((c) => typeof c === "string" && c.trim().length > 0) : [];
 
   return {

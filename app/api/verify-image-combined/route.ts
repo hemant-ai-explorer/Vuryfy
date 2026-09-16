@@ -5,6 +5,8 @@ import { runQuickCheck, normalizeClaim, ENGINE_VERSION, type QuickCheckResult } 
 import { runImageQuickCheck, type ImageAnalysisResult } from "@/lib/image-analysis";
 import { computeCacheKey, getCachedVerification, writeCache, type CachedVerification } from "@/lib/verification-cache";
 import { detectPaymentReceipt } from "@/lib/detect-payment-receipt";
+import { getUserLanguage } from "@/lib/user-language";
+import { translate } from "@/lib/translations";
 
 // Route-level execution budget (Sept 2026 fix — see app/api/deep/route.ts's
 // comment for the full rationale). This route runs two AI pipelines in
@@ -45,6 +47,11 @@ export const maxDuration = 60;
 // vision half is deliberately NOT cached — see lib/image-analysis.ts's
 // header on why (real photos are essentially never byte-identical on
 // resubmission).
+//
+// Sept 16, 2026 fast-follow: the text half's cache namespace is now
+// language-aware (same pattern as app/api/verify/route.ts), and the
+// vision half now gets the user's language passed through so its own
+// summary/caveats come back localized.
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_BASE64_LENGTH = 8_000_000;
 
@@ -104,8 +111,10 @@ export async function POST(request: Request) {
     });
   }
 
+  const language = await getUserLanguage(admin, user.id);
+  const textCacheNamespace = language === "en" ? "image_ocr" : `image_ocr:${language}`;
   const normalizedOcr = normalizeClaim(ocrText);
-  const textCacheKey = computeCacheKey(normalizedOcr, "image_ocr", ENGINE_VERSION);
+  const textCacheKey = computeCacheKey(normalizedOcr, textCacheNamespace, ENGINE_VERSION);
 
   const { data: remaining, error: rpcError } = await admin.rpc("decrement_quick_check", {
     p_user_id: user.id,
@@ -132,8 +141,8 @@ export async function POST(request: Request) {
   let imageResult: ImageAnalysisResult;
   try {
     const [freshText, freshImage] = await Promise.all([
-      textCached ? Promise.resolve(null) : runQuickCheck(ocrText),
-      runImageQuickCheck(imageBase64, mimeType, context || null),
+      textCached ? Promise.resolve(null) : runQuickCheck(ocrText, language),
+      runImageQuickCheck(imageBase64, mimeType, context || null, language),
     ]);
     textResult = textCached ?? (freshText as QuickCheckResult);
     imageResult = freshImage as ImageAnalysisResult;
@@ -248,7 +257,7 @@ export async function POST(request: Request) {
     secondary: imageRow
       ? {
           id: imageRow.id,
-          eyebrow: "THE PHOTO ITSELF",
+          eyebrow: translate(language, "result.eyebrowPhoto"),
           verdict: imageRow.verdict,
           confidence: imageRow.confidence,
           explanation: imageRow.summary,

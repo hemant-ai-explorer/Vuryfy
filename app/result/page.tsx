@@ -1,6 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useLanguage } from "@/app/providers/language-provider";
+import { translateVerdict } from "@/lib/translations";
+import { parseJsonResponse } from "@/lib/safe-json";
 
 type PaymentReceiptInfo = {
   amount?: string;
@@ -71,6 +74,7 @@ type Result = {
 
 export default function ResultPage() {
   const router = useRouter();
+  const { t, language } = useLanguage();
   const [r, setR] = useState<Result | null>(null);
   const [payeeChecking, setPayeeChecking] = useState<"quick" | "deep" | null>(null);
   const [payeeCheckError, setPayeeCheckError] = useState("");
@@ -104,7 +108,7 @@ export default function ResultPage() {
           upi_id: r.payment_request.payeeId,
         }),
       });
-      const d = await res.json();
+      const d = await parseJsonResponse(res);
       if (!res.ok) throw new Error(d.error || "Investigation failed");
       const next = { ...d, return_to: r.return_to };
       sessionStorage.setItem("vuryfy_result", JSON.stringify(next));
@@ -127,36 +131,57 @@ export default function ResultPage() {
       <main className="shell narrow">
         <nav>
           <button className="back" onClick={() => router.push(newCheckHref)}>
-            ← New check
+            {t("nav.newCheck")}
           </button>
-          <div className="credits">Credits · {r.credits.total}</div>
+          <div className="credits">
+            {t("nav.creditsPrefix")}
+            {r.credits.total}
+          </div>
         </nav>
         <section className="result">
-          <p className="eyebrow">PAYMENT RECEIPT</p>
+          <p className="eyebrow">{t("result.receiptEyebrow")}</p>
           <div className="qr-payment">
-            <span>THIS LOOKS LIKE A PAYMENT RECEIPT</span>
-            <h3>{r.receipt?.amount ? `₹${r.receipt.amount}` : "Amount not clearly readable"}</h3>
-            {r.receipt?.fromName && <p className="payee-id">From: {r.receipt.fromName}</p>}
-            {r.receipt?.toName && <p className="payee-id">To: {r.receipt.toName}</p>}
-            {r.receipt?.appUsed && <p className="payee-id">Via: {r.receipt.appUsed}</p>}
-            {r.receipt?.transactionId && <p className="payee-id">Transaction ID: {r.receipt.transactionId}</p>}
-            {r.receipt?.date && <p className="payee-id">Date: {r.receipt.date}</p>}
-            <p className="caution">
-              Vuryfy can&apos;t confirm a private payment like this actually went through — there&apos;s
-              no public record of a bank/UPI transfer for a search to check, so we can&apos;t give this
-              a Verified/Unverified score the way we would a public claim. Receipts and screenshots
-              like this can also be faked with widely available apps, even when they look completely
-              convincing. The only way to be sure is to check your own bank or UPI app for the actual
-              credit before relying on this. No credit was charged for this check.
-            </p>
+            <span>{t("result.receiptBadge")}</span>
+            <h3>{r.receipt?.amount ? `₹${r.receipt.amount}` : t("result.receiptAmountUnclear")}</h3>
+            {r.receipt?.fromName && (
+              <p className="payee-id">
+                {t("result.receiptFrom")}
+                {r.receipt.fromName}
+              </p>
+            )}
+            {r.receipt?.toName && (
+              <p className="payee-id">
+                {t("result.receiptTo")}
+                {r.receipt.toName}
+              </p>
+            )}
+            {r.receipt?.appUsed && (
+              <p className="payee-id">
+                {t("result.receiptVia")}
+                {r.receipt.appUsed}
+              </p>
+            )}
+            {r.receipt?.transactionId && (
+              <p className="payee-id">
+                {t("result.receiptTxnId")}
+                {r.receipt.transactionId}
+              </p>
+            )}
+            {r.receipt?.date && (
+              <p className="payee-id">
+                {t("result.receiptDate")}
+                {r.receipt.date}
+              </p>
+            )}
+            <p className="caution">{t("result.receiptCaution")}</p>
           </div>
           <div className="claim">
-            <span>WHAT WE READ</span>
+            <span>{t("result.whatWeRead")}</span>
             <p>{r.claim}</p>
           </div>
           <div className="result-actions">
             <button className="secondary" onClick={() => router.push(newCheckHref)}>
-              Check another
+              {t("result.checkAnother")}
             </button>
           </div>
         </section>
@@ -169,44 +194,36 @@ export default function ResultPage() {
       <main className="shell narrow">
         <nav>
           <button className="back" onClick={() => router.push(newCheckHref)}>
-            ← New check
+            {t("nav.newCheck")}
           </button>
-          <div className="credits">Credits · {r.credits.total}</div>
+          <div className="credits">
+            {t("nav.creditsPrefix")}
+            {r.credits.total}
+          </div>
         </nav>
         <section className="result">
-          <p className="eyebrow">PAYMENT REQUEST / QR CODE</p>
+          <p className="eyebrow">{t("result.requestEyebrow")}</p>
           <div className="qr-payment">
-            <span>THIS LOOKS LIKE A "SCAN TO PAY" CARD</span>
-            <h3>{r.payment_request?.payeeName || "Unnamed payee"}</h3>
+            <span>{t("result.requestBadge")}</span>
+            <h3>{r.payment_request?.payeeName || t("payee.unnamed")}</h3>
             {r.payment_request?.payeeId && <p className="payee-id">{r.payment_request.payeeId}</p>}
-            <p className="caution">
-              Vuryfy can&apos;t verify who actually controls a payment ID like this — that
-              isn&apos;t something a web search can confirm, whether it arrives as a scannable QR
-              code or a screenshot of one. Before paying, make sure the name above matches who
-              you intend to pay, and confirm directly with them if you&apos;re unsure. No credit
-              was charged for this check.
-            </p>
+            <p className="caution">{t("result.requestCaution")}</p>
           </div>
 
           {r.payment_request?.payeeId && (
             <div className="qr-decoded" style={{ marginTop: 20 }}>
-              <span>INVESTIGATE THIS PAYEE</span>
-              <p className="hint">
-                This searches the public web for the payee&apos;s name and ID — scam reports,
-                complaints, or a legitimate business presence. It still can&apos;t confirm who
-                controls the ID; it can only tell you what&apos;s publicly findable, which may be
-                nothing either way.
-              </p>
+              <span>{t("payee.investigateEyebrow")}</span>
+              <p className="hint">{t("result.investigateHint")}</p>
               <div className="result-actions">
                 <button
                   className="secondary"
                   onClick={() => investigatePayee("deep")}
                   disabled={!!payeeChecking}
                 >
-                  {payeeChecking === "deep" ? "Investigating…" : "Deep Investigation"}
+                  {payeeChecking === "deep" ? t("claim.investigating") : t("claim.deepInvestigation")}
                 </button>
                 <button onClick={() => investigatePayee("quick")} disabled={!!payeeChecking}>
-                  {payeeChecking === "quick" ? "Checking…" : "Quick Check"}
+                  {payeeChecking === "quick" ? t("claim.checking") : t("claim.quickCheck")}
                 </button>
               </div>
               {payeeCheckError && <p className="error">{payeeCheckError}</p>}
@@ -214,12 +231,12 @@ export default function ResultPage() {
           )}
 
           <div className="claim">
-            <span>WHAT WE READ</span>
+            <span>{t("result.whatWeRead")}</span>
             <p>{r.claim}</p>
           </div>
           <div className="result-actions">
             <button className="secondary" onClick={() => router.push(newCheckHref)}>
-              Check another
+              {t("result.checkAnother")}
             </button>
           </div>
         </section>
@@ -238,39 +255,45 @@ export default function ResultPage() {
     <main className="shell narrow">
       <nav>
         <button className="back" onClick={() => router.push(newCheckHref)}>
-          ← New check
+          {t("nav.newCheck")}
         </button>
-        <div className="credits">Credits · {r.credits.total}</div>
+        <div className="credits">
+          {t("nav.creditsPrefix")}
+          {r.credits.total}
+        </div>
       </nav>
       <section className="result">
-        <p className="eyebrow">{isDeep ? "DEEP INVESTIGATION RESULT" : "QUICK CHECK RESULT"}</p>
+        <p className="eyebrow">{isDeep ? t("result.deepResultEyebrow") : t("result.quickResultEyebrow")}</p>
         {isScam ? (
           <div className="scam-warning">
-            <span>⚠ SCAM WARNING</span>
-            <div className="verdict">Scam</div>
-            <div className="confidence">Confidence · {r.confidence}%</div>
-            <p className="caution">
-              This was flagged as a scam based on the evidence found — don&apos;t click through,
-              pay, or share personal details with it. Check the evidence below for what we found.
-            </p>
+            <span>{t("result.scamWarning")}</span>
+            <div className="verdict">{translateVerdict(language, "Scam")}</div>
+            <div className="confidence">
+              {t("result.confidencePrefix")}
+              {r.confidence}%
+            </div>
+            <p className="caution">{t("result.scamCaution")}</p>
           </div>
         ) : (
           <>
-            <div className="verdict">{r.verdict}</div>
-            <div className="confidence">Confidence · {r.confidence}%</div>
+            <div className="verdict">{translateVerdict(language, r.verdict)}</div>
+            <div className="confidence">
+              {t("result.confidencePrefix")}
+              {r.confidence}%
+            </div>
           </>
         )}
         <div className="claim">
-          <span>CLAIM</span>
+          <span>{t("result.claimLabel")}</span>
           <p>{r.claim}</p>
         </div>
         <div className="explanation">
-          <span>WHY</span>
+          <span>{t("result.whyLabel")}</span>
           <p>{r.explanation}</p>
         </div>
         {r.evidence?.length > 0 && (
           <div className="evidence">
-            <span>EVIDENCE</span>
+            <span>{t("result.evidenceLabel")}</span>
             {r.evidence.map((e, i) => (
               <a key={i} href={e.url} target="_blank" rel="noreferrer">
                 <strong>{e.title}</strong>
@@ -281,7 +304,7 @@ export default function ResultPage() {
         )}
         {r.caveats?.length > 0 && (
           <div className="caveats">
-            <span>NOTES</span>
+            <span>{t("result.notesLabel")}</span>
             {r.caveats.map((c, i) => (
               <p key={i}>{c}</p>
             ))}
@@ -291,15 +314,18 @@ export default function ResultPage() {
           <>
             <hr style={{ margin: "28px 0", border: "none", borderTop: "1px solid #e5e5e5" }} />
             <p className="eyebrow">{r.secondary.eyebrow}</p>
-            <div className="verdict">{r.secondary.verdict}</div>
-            <div className="confidence">Confidence · {r.secondary.confidence}%</div>
+            <div className="verdict">{translateVerdict(language, r.secondary.verdict)}</div>
+            <div className="confidence">
+              {t("result.confidencePrefix")}
+              {r.secondary.confidence}%
+            </div>
             <div className="explanation">
-              <span>WHY</span>
+              <span>{t("result.whyLabel")}</span>
               <p>{r.secondary.explanation}</p>
             </div>
             {r.secondary.caveats && r.secondary.caveats.length > 0 && (
               <div className="caveats">
-                <span>NOTES</span>
+                <span>{t("result.notesLabel")}</span>
                 {r.secondary.caveats.map((c, i) => (
                   <p key={i}>{c}</p>
                 ))}
@@ -313,10 +339,10 @@ export default function ResultPage() {
               navigator.clipboard?.writeText(r.claim + "\n\n" + r.verdict + "\n" + r.explanation)
             }
           >
-            Share result
+            {t("result.shareResult")}
           </button>
           <button className="secondary" onClick={() => router.push(newCheckHref)}>
-            Verify another
+            {t("result.verifyAnother")}
           </button>
         </div>
       </section>

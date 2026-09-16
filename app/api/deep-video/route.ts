@@ -3,6 +3,8 @@ import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runVideoDeepInvestigation, VIDEO_DEEP_ENGINE_VERSION, type VideoAnalysisResult } from "@/lib/video-analysis";
 import { normalizeClaim } from "@/lib/quick-check";
+import { getUserLanguage } from "@/lib/user-language";
+import { withRetryOnce } from "@/lib/db-retry";
 import {
   downloadVideoFromStorage,
   uploadDownloadedVideoToGemini,
@@ -30,8 +32,9 @@ export const maxDuration = 450;
 
 // Video authenticity Deep Investigation — mirrors app/api/verify-video/
 // route.ts exactly (see that file's header for the full rationale, and for
-// the Sept 15, 2026 storage_path/content-hash-cache-key rework). Only
-// differences from the Quick Check version: the reasoning-tier pipeline
+// the Sept 15, 2026 storage_path/content-hash-cache-key rework, and the
+// Sept 16, 2026 language-aware cache namespace). Only differences from the
+// Quick Check version: the reasoning-tier pipeline
 // (runVideoDeepInvestigation), its own engine version/cache namespace, and
 // decrement_deep_investigation/refund_deep_investigation — same asymmetry
 // as every other Quick Check/Deep Investigation pair in this app.
@@ -70,6 +73,8 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+  const language = await getUserLanguage(admin, user.id);
+  const videoCacheNamespace = language === "en" ? "video" : `video:${language}`;
 
   const { data: remaining, error: rpcError } = await admin.rpc("decrement_deep_investigation", {
     p_user_id: user.id,
@@ -97,7 +102,7 @@ export async function POST(request: Request) {
 
   try {
     const { bytes, contentHash } = await downloadVideoFromStorage(admin, storagePath);
-    cacheKey = computeCacheKey(`sha256:${contentHash}|ctx:${context}`, "video", VIDEO_DEEP_ENGINE_VERSION);
+    cacheKey = computeCacheKey(`sha256:${contentHash}|ctx:${context}`, videoCacheNamespace, VIDEO_DEEP_ENGINE_VERSION);
 
     const cached = await getCachedVerification(admin, cacheKey);
     cacheHit = cached !== null;
@@ -107,7 +112,7 @@ export async function POST(request: Request) {
     } else {
       const geminiFile = await uploadDownloadedVideoToGemini(bytes, mimeType);
       geminiFileName = geminiFile.name;
-      result = await runVideoDeepInvestigation(geminiFile.fileUri, mimeType, context || null);
+      result = await runVideoDeepInvestigation(geminiFile.fileUri, mimeType, context || null, language);
     }
   } catch (err) {
     console.error("[deep-video] pipeline failed (refunding credit):", err);
@@ -143,25 +148,29 @@ export async function POST(request: Request) {
 
   const claimText = context || "[Video submitted for authenticity analysis]";
 
-  const { data: verification, error: insertError } = await admin
-    .from("verifications")
-    .insert({
-      user_id: user.id,
-      mode: "deep",
-      input_type: "video",
-      claim_text: claimText,
-      normalized_claim: normalizeClaim(claimText),
-      verdict: result.verdict,
-      confidence: result.confidence,
-      summary: result.summary,
-      key_evidence: result.key_evidence,
-      sources: result.sources,
-      caveats: result.caveats,
-      engine_version: result.engine_version,
-      credit_charged: true,
-    })
-    .select()
-    .single();
+  const { data: verification, error: insertError } = await withRetryOnce(
+    (client) =>
+      client
+        .from("verifications")
+        .insert({
+          user_id: user.id,
+          mode: "deep",
+          input_type: "video",
+          claim_text: claimText,
+          normalized_claim: normalizeClaim(claimText),
+          verdict: result.verdict,
+          confidence: result.confidence,
+          summary: result.summary,
+          key_evidence: result.key_evidence,
+          sources: result.sources,
+          caveats: result.caveats,
+          engine_version: result.engine_version,
+          credit_charged: true,
+        })
+        .select()
+        .single(),
+    admin
+  );
 
   if (insertError || !verification) {
     console.error("[deep-video] verifications insert failed:", insertError);
