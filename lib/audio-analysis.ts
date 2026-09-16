@@ -269,6 +269,7 @@ export async function runAudioQuickCheck(
     responseSchema: AUDIO_SCHEMA,
     audioParts: [{ mimeType, data: audioBase64 }],
     timeoutMs: 25_000,
+    callSite: "audio-analysis.quick",
   });
   return toResult(data, AUDIO_QUICK_ENGINE_VERSION, language);
 }
@@ -287,6 +288,7 @@ export async function runAudioDeepInvestigation(
     audioParts: [{ mimeType, data: audioBase64 }],
     timeoutMs: 30_000,
     fallbackModels: AUDIO_DEEP_FALLBACK_MODELS,
+    callSite: "audio-analysis.deep",
   });
   return toResult(data, AUDIO_DEEP_ENGINE_VERSION, language);
 }

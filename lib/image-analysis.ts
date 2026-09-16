@@ -235,6 +235,7 @@ export async function runImageQuickCheck(
     responseSchema: buildVisionSchema(BASE_VERDICTS),
     imageParts: [{ mimeType, data: imageBase64 }],
     timeoutMs: 20_000,
+    callSite: "image-analysis.quick",
   });
   return toResult(data, IMAGE_QUICK_ENGINE_VERSION, BASE_VERDICTS, [], language);
 }
@@ -259,6 +260,7 @@ export async function runImageDeepInvestigation(
     imageParts: [{ mimeType, data: imageBase64 }],
     timeoutMs: 25_000,
     fallbackModels: IMAGE_DEEP_FALLBACK_MODELS,
+    callSite: "image-analysis.deep",
   });
   return toResult(data, IMAGE_DEEP_ENGINE_VERSION, DEEP_VERDICTS, webPages, language);
 }

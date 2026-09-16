@@ -275,6 +275,7 @@ export async function runVideoQuickCheck(
     responseSchema: VIDEO_SCHEMA,
     videoFileRef: { fileUri, mimeType },
     timeoutMs: 120_000,
+    callSite: "video-analysis.quick",
   });
   return toResult(data, VIDEO_QUICK_ENGINE_VERSION, language);
 }
@@ -335,6 +336,7 @@ export async function runVideoDeepInvestigation(
     timeoutMs: 300_000,
     retryDelaysMs: VIDEO_DEEP_RETRY_DELAYS_MS,
     fallbackModels: VIDEO_DEEP_FALLBACK_MODELS,
+    callSite: "video-analysis.deep",
   });
   return toResult(data, VIDEO_DEEP_ENGINE_VERSION, language);
 }
