@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useLanguage } from "@/app/providers/language-provider";
 import { SUPPORTED_LANGUAGES, type Language } from "@/lib/translations";
@@ -14,21 +14,33 @@ import { SUPPORTED_LANGUAGES, type Language } from "@/lib/translations";
 //
 // Language-picker step added Sept 16, 2026 (Phase 1 of the multilingual
 // rollout — see lib/translations.ts's header): sign-in and sign-up are the
-// same OTP flow (Supabase creates the account automatically on a brand
-// new phone number's first verification, per the "Sign in or sign up"
-// copy on the landing page), so there's no separate "signup form" moment
-// to hang a language picker off of. Instead, right after OTP verification
-// succeeds, this checks whether the user already has a stored language
-// preference (via useLanguage()'s hasPreference flag, populated from
-// /api/preferences). A MISSING preference — true for both a genuinely new
-// sign-up and anyone who verified before this feature existed — shows the
-// picker as a third screen state before continuing home. An EXISTING
-// preference (any returning user who already chose one) skips straight to
-// "/", so this step is only ever seen once per account. Changing it later
-// happens from Settings (app/settings/page.tsx), not here.
-export default function Login() {
+// same OTP flow underneath (Supabase creates the account automatically on a
+// brand new phone number's first verification) — there's no separate
+// "signup form" moment to hang a language picker off of. Instead, right
+// after OTP verification succeeds, this checks whether the user already has
+// a stored language preference (via useLanguage()'s hasPreference flag,
+// populated from /api/preferences). A MISSING preference — true for both a
+// genuinely new sign-up and anyone who verified before this feature
+// existed — shows the picker as a third screen state before continuing
+// home. An EXISTING preference (any returning user who already chose one)
+// skips straight to "/", so this step is only ever seen once per account.
+// Changing it later happens from Settings (app/settings/page.tsx), not here.
+//
+// Separate Sign in / Sign up entry points added Sept 16, 2026, per the
+// user's explicit request for two distinct buttons on the landing page
+// (app/page.tsx) instead of one combined "Sign in or sign up" button. The
+// underlying OTP flow is still exactly one form either way — Supabase has
+// no separate signup step to route to — so `?intent=signin`/`?intent=signup`
+// on the URL only changes this screen's copy (eyebrow/heading/sub) before
+// an OTP has been requested; the phone input, OTP verification, and
+// language-picker step behave identically regardless of which button was
+// clicked. `useSearchParams()` requires a Suspense boundary at build time
+// (same convention as app/verify/claim/page.tsx), so the component reading
+// it is wrapped below rather than exported directly.
+function LoginForm() {
   const router = useRouter();
   const supabase = createClient();
+  const searchParams = useSearchParams();
   const { t, hasPreference, setLanguage, refresh } = useLanguage();
   const [phone, setPhone] = useState("");
   const [otpSent, setOtpSent] = useState(false);
@@ -37,6 +49,15 @@ export default function Login() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [savingLanguage, setSavingLanguage] = useState(false);
+
+  const intentParam = searchParams.get("intent");
+  const intent: "signin" | "signup" | null =
+    intentParam === "signin" ? "signin" : intentParam === "signup" ? "signup" : null;
+  const eyebrowStart = intent === "signin" ? t("login.eyebrowSignin") : t("login.eyebrowStart");
+  const headingStart =
+    intent === "signin" ? t("login.headingSignin") : intent === "signup" ? t("login.headingSignup") : t("login.headingStart");
+  const subStart =
+    intent === "signin" ? t("login.subSignin") : intent === "signup" ? t("login.subSignup") : t("login.subStart");
 
   function toE164(input: string) {
     const digits = input.replace(/\D/g, "");
@@ -135,9 +156,9 @@ export default function Login() {
         <div className="brand">Vuryfy</div>
       </nav>
       <section className="hero">
-        <p className="eyebrow">{otpSent ? t("login.eyebrowCode") : t("login.eyebrowStart")}</p>
-        <h1>{otpSent ? t("login.headingCode") : t("login.headingStart")}</h1>
-        <p className="sub">{otpSent ? t("login.subCode") : t("login.subStart")}</p>
+        <p className="eyebrow">{otpSent ? t("login.eyebrowCode") : eyebrowStart}</p>
+        <h1>{otpSent ? t("login.headingCode") : headingStart}</h1>
+        <p className="sub">{otpSent ? t("login.subCode") : subStart}</p>
         <div className="panel">
           {!otpSent ? (
             <>
@@ -178,5 +199,13 @@ export default function Login() {
         </div>
       </section>
     </main>
+  );
+}
+
+export default function Login() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

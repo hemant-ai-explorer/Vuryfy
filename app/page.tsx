@@ -62,9 +62,14 @@ export default function Home() {
           <p className="eyebrow">{t("landing.eyebrow")}</p>
           <h1>{t("landing.heading")}</h1>
           <p className="sub">{t("landing.sub")}</p>
-          <Link className="primary-link" href="/login">
-            {t("landing.cta")}
-          </Link>
+          <div className="home-actions">
+            <Link className="primary-link" href="/login?intent=signup">
+              {t("landing.signUp")}
+            </Link>
+            <Link className="secondary-link" href="/login?intent=signin">
+              {t("landing.signIn")}
+            </Link>
+          </div>
           <p className="hint">{t("landing.hint")}</p>
         </section>
       </main>
