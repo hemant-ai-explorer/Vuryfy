@@ -48,7 +48,22 @@ import { translate, LANGUAGE_NAMES, type Language } from "@/lib/translations";
 // leaving this unchanged would keep serving pre-change cached verdicts
 // out of the exact-match cache indefinitely, since cache entries are keyed
 // on this string (see verification-cache.ts).
-export const DEEP_ENGINE_VERSION = "v2-gemini-tavily-deep";
+//
+// Sept 17, 2026: bumped v2 -> v3 — added an explicit rule to
+// SYNTHESIS_SYSTEM_PROMPT for self-referential claims ("this recording was
+// made using X"), mirroring the same fix just made to quick-check.ts's
+// SYSTEM_PROMPT (see that file's ENGINE_VERSION comment for the full
+// story). Deep Investigation was already reaching the right answer on
+// this claim shape in practice (correctly "Unverified" rather than a
+// false "True"), but only as an emergent property of the reasoning-tier
+// model's judgment, not because the prompt said so explicitly — the same
+// kind of implicit-not-explicit gap that let quick-check.ts drift into a
+// real mistake on the identical claim. Making the rule explicit here too
+// is a preventive fix, not a response to an observed DI failure, but it
+// can shift verdicts on other borderline self-referential claims, so it
+// gets the same version bump discipline as any other prompt change that
+// can change verdict outcomes.
+export const DEEP_ENGINE_VERSION = "v3-gemini-tavily-deep";
 
 // Sept 15, 2026: added same day as the engine_version bump above, after a
 // live 503 on this exact call surfaced a gap — modelForTier's "reasoning"
@@ -126,6 +141,7 @@ const SYNTHESIS_SYSTEM_PROMPT = `You are Vuryfy's Deep Investigation engine, per
 - Decide a verdict: "True", "False", "Misleading", "Unverified", or "Scam".
 - Use "Scam" only when the evidence specifically names or identifies THIS claim's exact link, domain, or entity as a scam, phishing site, or fraud operation — a report, blocklist entry, news article, or complaint that is actually about this specific link/domain/entity, found across the sub-questions this investigation searched, not merely about the same general category or brand. Evidence that only describes how this type of scam usually works in general (e.g. a generic guide to phishing tactics, or an article about scams impersonating the same brand without naming this exact domain) is NOT sufficient on its own — that case is "Unverified", not "Scam", even if the claim's own wording sounds exactly like a textbook phishing attempt. Never choose "Scam" from the link or claim merely looking suspicious, unfamiliar, unofficial, or brand-adjacent with no evidence specifically about it — a confident false accusation is worse than an unresolved one.
 - For anything that is simply incorrect information but not a deliberate scam/fraud attempt, use "False" or "Misleading" as appropriate, not "Scam".
+- Some claims assert something about themselves or about the specific item being checked — e.g. "this recording/photo/document was made using X," "this was verified/certified by Y," "this comes from Z." Evidence that only confirms X/Y/Z is real, legitimate, or capable of that action is NOT sufficient to call such a claim "True" — that only shows the claim is plausible, not that THIS specific instance actually is what it claims to be. Only mark such a claim "True" if the evidence specifically confirms this exact instance (a report, record, or verification specifically about this item) — not merely that the named tool, organization, or service exists and does that kind of thing in general. Otherwise, use "Unverified". This is the same standard already required above for "Scam": evidence about the general category is never evidence about this specific case.
 - You may ONLY use the numbered evidence provided below — never rely on outside knowledge, and never invent a source. Weigh evidence across ALL sub-questions, not just one.
 - contradiction_level should reflect how much the retrieved evidence disagrees with itself (some sources supporting the claim, others contradicting it). High contradiction should generally push toward "Misleading" or "Unverified" rather than a confident True/False.
 - confidence is 0-100 and must reflect how well the evidence actually supports the verdict — weak, single-source, or contradictory evidence should never produce a high confidence score.
