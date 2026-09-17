@@ -40,6 +40,16 @@ export const GEMINI_PRICING: Record<string, GeminiModelPricing> = {
   "gemini-3.5-flash-lite": { inputPerMillion: 0.3, outputPerMillion: 2.5 },
   // Promo rate through Dec 31, 2026 — becomes $1.50/$7.50 after. Revisit
   // this entry once that date passes.
+  // Sept 17, 2026: no audioInputPerMillion here is CONFIRMED CORRECT, not a
+  // gap — checked Google's own pricing page (ai.google.dev/gemini-api/docs/
+  // pricing) directly. Unlike gemini-3.1-flash-lite above (which Google
+  // prices at 2x for audio input), gemini-3.8-flash has no separate audio
+  // rate at all: $0.75/1M applies uniformly to text/image/video/audio
+  // input alike. So every audio-analysis.quick/audio-analysis.deep call
+  // using this model (audio-analysis.ts) has been costed correctly in
+  // api_cost_logs all along — this was flagged as an open question in an
+  // earlier addendum entry and is now resolved, no code change needed
+  // beyond this comment.
   "gemini-3.8-flash": { inputPerMillion: 0.75, outputPerMillion: 3.75 },
   // Embeddings are input-only — Google charges nothing for the returned
   // vector (confirmed via provider pricing pages, Sept 16, 2026).
