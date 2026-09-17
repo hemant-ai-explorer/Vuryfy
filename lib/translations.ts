@@ -179,6 +179,14 @@ const en: Dictionary = {
   "hint.checkIt": "Check it",
   "payee.unnamed": "Unnamed payee",
   "payee.investigateEyebrow": "INVESTIGATE THIS PAYEE",
+  // Sept 17, 2026: closes the explicitly-flagged gap from the Sept 16
+  // multilingual work (see architecture-decisions.md/-addendum's "payee
+  // routes' own hardcoded English DISCLAIMER caveat" entries) —
+  // app/api/verify-payee/route.ts and app/api/deep-payee/route.ts now call
+  // translate(language, "payee.disclaimer") instead of a hardcoded English
+  // const, same pattern as every other pipeline's disclaimer caveat.
+  "payee.disclaimer":
+    "This searches the public web for reports about this payee — it can't confirm who actually controls the payment ID, and finding nothing doesn't mean they're legitimate. Most real businesses and most scammers alike often have little to no searchable footprint.",
   "result.receiptEyebrow": "PAYMENT RECEIPT",
   "result.receiptBadge": "THIS LOOKS LIKE A PAYMENT RECEIPT",
   "result.receiptAmountUnclear": "Amount not clearly readable",
@@ -400,6 +408,8 @@ const hi: Dictionary = {
   "hint.checkIt": "जांचें",
   "payee.unnamed": "अनाम प्राप्तकर्ता",
   "payee.investigateEyebrow": "इस प्राप्तकर्ता की जांच करें",
+  "payee.disclaimer":
+    "यह इस प्राप्तकर्ता के बारे में रिपोर्ट के लिए सार्वजनिक वेब पर खोज करता है — यह पुष्टि नहीं कर सकता कि पेमेंट ID पर वास्तव में किसका नियंत्रण है, और कुछ न मिलने का मतलब यह नहीं कि वे वैध हैं। ज़्यादातर असली व्यवसायों और ज़्यादातर धोखेबाज़ों, दोनों का अक्सर वेब पर बहुत कम या कोई खोजने योग्य निशान नहीं होता।",
   "result.receiptEyebrow": "भुगतान रसीद",
   "result.receiptBadge": "यह एक भुगतान रसीद लगती है",
   "result.receiptAmountUnclear": "राशि स्पष्ट रूप से पढ़ी नहीं जा सकी",

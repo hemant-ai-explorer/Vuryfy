@@ -3,6 +3,7 @@ import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runQuickCheck, normalizeClaim, ENGINE_VERSION, type QuickCheckResult } from "@/lib/quick-check";
 import { getUserLanguage } from "@/lib/user-language";
+import { translate } from "@/lib/translations";
 import {
   computeCacheKey,
   getCachedVerification,
@@ -53,12 +54,14 @@ export const maxDuration = 60;
 // localization (a `language` param already threaded through that
 // pipeline) — this route just needed to look up the user's language and
 // pass it along, plus namespace the cache key by language, same pattern
-// as app/api/verify/route.ts. This route's own DISCLAIMER caveat is NOT
-// yet localized (still English-only) — that's a small remaining gap, left
-// for a follow-up since it's a single fixed sentence rather than part of
-// the reported bug (video/audio/image authenticity results).
-const DISCLAIMER =
-  "This searches the public web for reports about this payee — it can't confirm who actually controls the payment ID, and finding nothing doesn't mean they're legitimate. Most real businesses and most scammers alike often have little to no searchable footprint.";
+// as app/api/verify/route.ts.
+//
+// Sept 17, 2026: closed the DISCLAIMER localization gap flagged at the end
+// of the Sept 16 fast-follow above — this caveat now comes from
+// translate(language, "payee.disclaimer") (lib/translations.ts) instead of
+// a hardcoded English const, computed inline in POST() below where
+// `language` is actually known, same pattern as every other pipeline's
+// disclaimer caveat.
 
 function buildPayeeClaim(payeeName: string, upiId: string): string {
   if (payeeName) {
@@ -166,7 +169,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const caveats = [DISCLAIMER];
+  const caveats = [translate(language, "payee.disclaimer")];
 
   const { data: verification, error: insertError } = await admin
     .from("verifications")
