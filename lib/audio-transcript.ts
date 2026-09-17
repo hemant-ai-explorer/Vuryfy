@@ -30,6 +30,23 @@ import { callStructured } from "@/lib/ai-gateway";
 // picks afterward — transcription accuracy doesn't benefit from the
 // reasoning tier, and keeping this one call cheap keeps the free-preview
 // step actually cheap.
+//
+// Sept 17, 2026: added fallbackModels — this call had been the one cheap-
+// tier call in the whole codebase with NO fallback safety net, despite
+// video-transcript.ts's identical call (lib/video-transcript.ts's
+// VIDEO_TRANSCRIPT_FALLBACK_MODELS, added Sept 15 after real, repeated
+// live 503s on that exact call) already solving this same problem.
+// Surfaced by a live 503 on this exact route during testing
+// (`[transcribe-audio] transcription failed: ... Gemini API error 503`) —
+// with no fallback, that 503 hard-failed the ENTIRE audio flow (Quick
+// Check and Deep Investigation both, since neither can proceed without a
+// transcript) after only the bare 2-retry default, surfacing as a raw
+// "Try Again" instead of quietly recovering. Same fallback chain as
+// video-transcript.ts's, for the same reason (see that file's header:
+// falls UP to a stronger, hopefully-less-loaded model rather than down,
+// since a fully failed transcription blocks the whole downstream flow —
+// worth the extra cost on the rare fallback case).
+const AUDIO_TRANSCRIPT_FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-3.8-flash"];
 
 interface TranscriptOutput {
   transcript: string;
@@ -55,6 +72,7 @@ export async function transcribeAudio(audioBase64: string, mimeType: string): Pr
     responseSchema: TRANSCRIPT_SCHEMA,
     audioParts: [{ mimeType, data: audioBase64 }],
     timeoutMs: 25_000, // audio can run longer than a still image; still bounded
+    fallbackModels: AUDIO_TRANSCRIPT_FALLBACK_MODELS,
     callSite: "audio-transcript.transcribe",
   });
 

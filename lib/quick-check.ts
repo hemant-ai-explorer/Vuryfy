@@ -143,6 +143,22 @@ function buildEvidenceBlock(results: SearchResult[]): string {
     .join("\n\n");
 }
 
+// Sept 17, 2026: added after a live, reproducing 503 (surfaced on
+// audio-transcript.ts's identical call, same day — see that file's header)
+// showed this project is currently exposed to real Gemini transient
+// errors on the "cheap" tier, not just "reasoning". This was the single
+// highest-impact gap of the sweep that followed: quick-check.verdict is
+// the one call every Quick Check across every input type (text, link, QR,
+// OCR, audio-transcript, video-transcript, payee-reputation) goes through
+// — a hard failure here, with no fallback, fails the whole product's most
+// heavily used path after only the bare 2-retry default, even when the
+// search step just above already succeeded and paid for real evidence.
+// Same "fall up to a stronger, hopefully-less-loaded model" chain as
+// audio-transcript.ts / video-transcript.ts, for the same reason: a fully
+// failed Quick Check is worse than occasionally spending more on the rare
+// fallback case.
+const QUICK_CHECK_VERDICT_FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-3.8-flash"];
+
 export async function runQuickCheck(claimRaw: string, language: Language = "en"): Promise<QuickCheckResult> {
   const claim = normalizeClaim(claimRaw);
 
@@ -171,6 +187,7 @@ export async function runQuickCheck(claimRaw: string, language: Language = "en")
     systemPrompt: SYSTEM_PROMPT + languageInstruction(language),
     userPrompt,
     responseSchema: VERDICT_SCHEMA,
+    fallbackModels: QUICK_CHECK_VERDICT_FALLBACK_MODELS,
     callSite: "quick-check.verdict",
   });
 
