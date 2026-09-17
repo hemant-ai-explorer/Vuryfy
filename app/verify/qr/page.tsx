@@ -224,9 +224,18 @@ export default function VerifyQrPage() {
 
         {paymentInfo && (
           <div className="qr-payment">
+            {/* Sept 17, 2026: this card deliberately does NOT reveal the
+                payee's name/UPI ID here — that used to render immediately
+                after choosing the photo, before the user had picked Quick
+                Check or Deep Investigation, which read as "showing the
+                outcome" before the user made a choice. Identity now shows
+                only on the result page (app/result/page.tsx's
+                payee_reputation branch), after QC/DI is chosen. The one
+                exception is the impersonation warning below: it's free,
+                instant, and its entire value is catching a look-alike scam
+                BEFORE the user commits to paying or investigating, so it
+                still surfaces immediately. */}
             <span>{t("qr.paymentBadge")}</span>
-            <h3>{paymentInfo.payeeName || t("payee.unnamed")}</h3>
-            {paymentInfo.payeeId && <p className="payee-id">{paymentInfo.payeeId}</p>}
             {payeeWarning && (
               <div className="scam-warning">
                 <span>{t("qr.similarNameWarning")}</span>
@@ -237,11 +246,9 @@ export default function VerifyQrPage() {
                 </p>
               </div>
             )}
-            <p className="caution">{t("qr.paymentCaution")}</p>
 
-            {paymentInfo.kind === "upi" && paymentInfo.payeeId && (
-              <div className="qr-decoded" style={{ marginTop: 20 }}>
-                <span>{t("payee.investigateEyebrow")}</span>
+            {paymentInfo.kind === "upi" && paymentInfo.payeeId ? (
+              <div className="qr-decoded" style={{ marginTop: payeeWarning ? 20 : 0 }}>
                 <p className="hint">{t("qr.investigateHint")}</p>
                 <div className="result-actions">
                   <button
@@ -257,6 +264,11 @@ export default function VerifyQrPage() {
                 </div>
                 {payeeCheckError && <p className="error">{payeeCheckError}</p>}
               </div>
+            ) : (
+              // Non-UPI payment link (paypal.me, etc.) — no payee name/ID
+              // to investigate at all, so there's nothing to offer besides
+              // scanning another code.
+              <p className="hint">{t("qr.paymentLinkHint")}</p>
             )}
 
             <div className="result-actions">

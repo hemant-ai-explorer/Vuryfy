@@ -242,6 +242,12 @@ const en: Dictionary = {
   "qr.similarNameCaution": "This name is very close to {name} (ID: {id}), which you've scanned before in Vuryfy — but this QR code uses a different payment ID. This is a common impersonation pattern. Vuryfy can't tell you which of the two is the real one — verify directly with who you intend to pay before proceeding.",
   "qr.paymentCaution": "Vuryfy can't verify who actually controls a payment ID from a QR code alone — that isn't something a web search can confirm. Before paying, make sure the name above matches who you intend to pay, and confirm directly with them if you're unsure.",
   "qr.investigateHint": "This searches the public web for the payee's name and ID — scam reports, complaints, or a legitimate business presence. It still can't confirm this transaction or who controls the ID; it can only tell you what's publicly findable, which may be nothing either way.",
+  // Sept 17, 2026: shown for a non-UPI payment link (paypal.me, etc. — no
+  // payee name/ID to investigate), on the pre-choice screen that now
+  // deliberately withholds identity until after Quick Check/Deep
+  // Investigation is chosen. See qr.paymentBadge's usage in
+  // app/verify/qr/page.tsx for the full rationale.
+  "qr.paymentLinkHint": "This is a payment link. Vuryfy can't confirm who controls it or investigate it further — confirm directly with who you intend to pay before proceeding.",
   "qr.scanAnother": "Scan another",
   "qr.decodedBadge": "WE FOUND THIS IN YOUR QR CODE",
   "qr.decodedHint": "Quick Check gives a fast answer. Deep Investigation researches it more thoroughly and takes longer.",
@@ -464,6 +470,7 @@ const hi: Dictionary = {
   "qr.similarNameCaution": "यह नाम {name} (ID: {id}) से काफी मिलता-जुलता है, जिसे आपने पहले वुर्यफाई में स्कैन किया था — लेकिन इस QR कोड का भुगतान ID अलग है। यह एक आम प्रतिरूपण पैटर्न है। वुर्यफाई यह नहीं बता सकता कि इनमें से कौन-सा असली है — भुगतान करने से पहले जिसे आप भुगतान करना चाहते हैं, उससे सीधे पुष्टि करें।",
   "qr.paymentCaution": "वुर्यफाई यह पुष्टि नहीं कर सकता कि QR कोड से भुगतान ID को वाकई कौन नियंत्रित करता है — यह कोई वेब सर्च से पता नहीं चलता। भुगतान करने से पहले सुनिश्चित करें कि ऊपर दिया गया नाम उस व्यक्ति से मेल खाता है जिसे आप भुगतान करना चाहते हैं, और अगर अनिश्चित हों तो सीधे उनसे पुष्टि करें।",
   "qr.investigateHint": "यह प्राप्तकर्ता के नाम और ID के लिए सार्वजनिक वेब पर खोज करता है — धोखाधड़ी की रिपोर्ट, शिकायतें, या किसी वैध व्यवसाय की मौजूदगी। यह अब भी इस लेन-देन या यह ID किसे नियंत्रित करता है, इसकी पुष्टि नहीं कर सकता; यह केवल वही बता सकता है जो सार्वजनिक रूप से मिल सकता है, जो दोनों ही तरह से कुछ न भी हो सकता है।",
+  "qr.paymentLinkHint": "यह एक भुगतान लिंक है। वुर्यफाई यह पुष्टि नहीं कर सकता कि इसे कौन नियंत्रित करता है, और न ही इसकी आगे जांच कर सकता है — आगे बढ़ने से पहले जिसे आप भुगतान करना चाहते हैं, उससे सीधे पुष्टि करें।",
   "qr.scanAnother": "दूसरा स्कैन करें",
   "qr.decodedBadge": "हमें आपके QR कोड में यह मिला",
   "qr.decodedHint": "क्विक चेक तुरंत जवाब देता है। डीप इन्वेस्टिगेशन अधिक गहराई से जांच करता है और समय लेता है।",
