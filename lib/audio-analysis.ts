@@ -84,13 +84,22 @@ import { translate, LANGUAGE_NAMES, type Language } from "@/lib/translations";
 // lib/video-analysis.ts's identical comment for the full rationale; same
 // mechanism applied here, just for audio's own fields.
 
-export const AUDIO_QUICK_ENGINE_VERSION = "v4-gemini-audio-quick-aigen";
-// Sept 15, 2026: bumped v4 -> v5 — same reasoning as video-analysis.ts's
-// identical bump on VIDEO_DEEP_ENGINE_VERSION this same day: the model
-// behind "reasoning" tier changed (ai-gateway.ts's modelForTier), and
-// leaving this unchanged would keep serving pre-change cached verdicts
-// out of the exact-match cache indefinitely, since cache entries are keyed
-// on this string (see verification-cache.ts).
+// Sept 17, 2026: bumped v4 -> v5 — audio Quick Check moved from the
+// "cheap" tier (gemini-3.1-flash-lite) to the "reasoning" tier (same
+// model Deep Investigation uses). Root cause: a live test with an
+// obvious Narakeet-generated voice came back "Inconclusive" on Quick
+// Check while Deep Investigation correctly flagged it — not a bug in the
+// strict sense (HONESTY_RULES' "uncertain" -> "Inconclusive" downgrade
+// worked exactly as designed, never falsely claiming "Clean"), but the
+// cheap-tier model was punting to "uncertain" on well-produced TTS speech
+// far too often for the single most common check path to be useful
+// against the AI-voice-scam case this feature exists for. Bumping the
+// version also matters independent of the model swap itself: cache
+// entries are keyed on this string (see computeCacheKey calls in
+// app/api/verify-audio/route.ts and verify-audio-combined/route.ts), so
+// leaving it unchanged would keep serving pre-change "Inconclusive"
+// verdicts out of the exact-match cache indefinitely.
+export const AUDIO_QUICK_ENGINE_VERSION = "v5-gemini-audio-quick-aigen-reasoning";
 export const AUDIO_DEEP_ENGINE_VERSION = "v5-gemini-audio-deep-aigen";
 
 // Sept 15, 2026: added same day, after a live 503 surfaced this gap on
@@ -99,7 +108,13 @@ export const AUDIO_DEEP_ENGINE_VERSION = "v5-gemini-audio-deep-aigen";
 // "reasoning" tier now points every Deep Investigation pipeline at
 // gemini-3.8-flash, but the fallback safety net had only ever been wired
 // into video Deep Investigation. Audio shares the same exposure.
-const AUDIO_DEEP_FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"];
+//
+// Sept 17, 2026: now also passed to runAudioQuickCheck, since Quick
+// Check calls the reasoning tier too as of the version bump above and
+// inherits the exact same transient-503 exposure Deep Investigation has
+// — leaving Quick Check without the fallback net it never needed on the
+// cheap tier would be a new failure mode introduced by this change.
+const AUDIO_REASONING_FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"];
 
 export interface AudioAnalysisResult {
   verdict: string;
@@ -263,12 +278,19 @@ export async function runAudioQuickCheck(
   language: Language = "en"
 ): Promise<AudioAnalysisResult> {
   const { data } = await callStructured<AudioOutput>({
-    tier: "cheap",
+    // Sept 17, 2026: was "cheap" (gemini-3.1-flash-lite) — see
+    // AUDIO_QUICK_ENGINE_VERSION's header comment for why this moved to
+    // the same reasoning-tier model Deep Investigation uses. Quick Check
+    // is no longer cheaper than Deep Investigation for audio specifically;
+    // it still returns faster (shorter/no multi-pass prompt) but the cost
+    // difference between Quick and Deep for audio is now real but small.
+    tier: "reasoning",
     systemPrompt: QUICK_SYSTEM_PROMPT + languageInstruction(language),
     userPrompt: buildUserPrompt(context),
     responseSchema: AUDIO_SCHEMA,
     audioParts: [{ mimeType, data: audioBase64 }],
-    timeoutMs: 25_000,
+    timeoutMs: 30_000,
+    fallbackModels: AUDIO_REASONING_FALLBACK_MODELS,
     callSite: "audio-analysis.quick",
   });
   return toResult(data, AUDIO_QUICK_ENGINE_VERSION, language);
@@ -287,7 +309,7 @@ export async function runAudioDeepInvestigation(
     responseSchema: AUDIO_SCHEMA,
     audioParts: [{ mimeType, data: audioBase64 }],
     timeoutMs: 30_000,
-    fallbackModels: AUDIO_DEEP_FALLBACK_MODELS,
+    fallbackModels: AUDIO_REASONING_FALLBACK_MODELS,
     callSite: "audio-analysis.deep",
   });
   return toResult(data, AUDIO_DEEP_ENGINE_VERSION, language);
