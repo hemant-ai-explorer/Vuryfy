@@ -47,9 +47,18 @@ type Result = {
   // informational, non-verdict treatment, just a different source shape
   // (most commonly a photographed/OCR'd screenshot of someone's own QR
   // display screen).
-  type?: "verification" | "payment_receipt" | "payment_request";
+  type?: "verification" | "payment_receipt" | "payment_request" | "payee_reputation";
   receipt?: PaymentReceiptInfo | null;
   payment_request?: PaymentRequestInfo | null;
+  // Payee-reputation carve-out (Sept 17, 2026, see app/api/verify-payee/
+  // route.ts and app/api/deep-payee/route.ts): a payee-reputation result
+  // (from the QR payment card, or from investigating a payment_request
+  // card below) leads with the payee's own identity rather than the raw
+  // True/False/Misleading/Unverified verdict word, which read as
+  // confusing/alarming for what's really an identity/reputation lookup.
+  // `payee` carries the name/UPI ID being displayed; `verdict` (below)
+  // still decides whether the dedicated Scam alert shows.
+  payee?: { name: string | null; upiId: string } | null;
   // Second verdict block (added for audio's combined Quick Check/Deep
   // Investigation, Sept 14, 2026 — see app/api/verify-audio-combined/
   // route.ts): when a single button press runs two independent pipelines
@@ -250,6 +259,99 @@ export default function ResultPage() {
   // scam link doesn't read as just another "False". Applies to any claim
   // through either pipeline, not just QR-sourced ones.
   const isScam = r.verdict === "Scam";
+
+  // Payee-reputation carve-out (Sept 17, 2026, see the `Result` type's
+  // comment above and app/api/verify-payee/route.ts): rendered before the
+  // generic verdict branch below, since a payee-reputation result also has
+  // `verdict`/`confidence` set and would otherwise fall through into it.
+  // Non-scam outcomes never show the raw verdict word (True/False/
+  // Misleading/Unverified) — they lead with the payee's own name/ID, same
+  // as the free QR-decode preview, with a plain "no reports found" status
+  // line instead. A "Scam" verdict still gets the existing dedicated red
+  // warning card, just shown alongside the payee's identity rather than
+  // replacing it, so it's clear which payee the alert is about.
+  if (r.type === "payee_reputation") {
+    return (
+      <main className="shell narrow">
+        <nav>
+          <button className="back" onClick={() => router.push(newCheckHref)}>
+            {t("nav.newCheck")}
+          </button>
+          <div className="credits">
+            {t("nav.creditsPrefix")}
+            {r.credits.total}
+          </div>
+        </nav>
+        <section className="result">
+          <p className="eyebrow">{isDeep ? t("result.deepResultEyebrow") : t("result.quickResultEyebrow")}</p>
+          <div className="qr-payment">
+            <span>{t("result.payeeBadge")}</span>
+            <h3>{r.payee?.name || t("payee.unnamed")}</h3>
+            {r.payee?.upiId && <p className="payee-id">{r.payee.upiId}</p>}
+          </div>
+          {isScam ? (
+            <div className="scam-warning">
+              <span>{t("result.scamWarning")}</span>
+              <div className="confidence">
+                {t("result.confidencePrefix")}
+                {r.confidence}%
+              </div>
+              <p className="caution">{t("result.scamCaution")}</p>
+            </div>
+          ) : (
+            <>
+              <p className="hint">{t("result.payeeClear")}</p>
+              <div className="confidence">
+                {t("result.confidencePrefix")}
+                {r.confidence}%
+              </div>
+            </>
+          )}
+          <div className="explanation">
+            <span>{t("result.whyLabel")}</span>
+            <p>{r.explanation}</p>
+          </div>
+          {r.evidence?.length > 0 && (
+            <div className="evidence">
+              <span>{t("result.evidenceLabel")}</span>
+              {r.evidence.map((e, i) => (
+                <a key={i} href={e.url} target="_blank" rel="noreferrer">
+                  <strong>{e.title}</strong>
+                  <small>{e.url}</small>
+                </a>
+              ))}
+            </div>
+          )}
+          {r.caveats?.length > 0 && (
+            <div className="caveats">
+              <span>{t("result.notesLabel")}</span>
+              {r.caveats.map((c, i) => (
+                <p key={i}>{c}</p>
+              ))}
+            </div>
+          )}
+          <div className="result-actions">
+            <button
+              onClick={() =>
+                navigator.clipboard?.writeText(
+                  (r.payee?.name ? `${r.payee.name} — ${r.payee.upiId}` : r.payee?.upiId || r.claim) +
+                    "\n\n" +
+                    (isScam ? "SCAM" : t("result.payeeClear")) +
+                    "\n" +
+                    r.explanation
+                )
+              }
+            >
+              {t("result.shareResult")}
+            </button>
+            <button className="secondary" onClick={() => router.push(newCheckHref)}>
+              {t("result.verifyAnother")}
+            </button>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="shell narrow">

@@ -238,6 +238,18 @@ export async function POST(request: Request) {
   return NextResponse.json({
     id: verification.id,
     mode: "quick",
+    // Sept 17, 2026: `type: "payee_reputation"` + the explicit `payee`
+    // object let app/result/page.tsx render this differently from an
+    // ordinary claim result — see that file's payee_reputation branch.
+    // The raw True/False/Misleading/Unverified verdict word was reading
+    // as confusing/alarming for what's really an identity/reputation
+    // lookup, not a fact-check, so the result now leads with the payee's
+    // own name/ID instead (same treatment the free QR-decode preview
+    // already gives it) and only shows a dedicated alert when the verdict
+    // actually is "Scam" — verdict/confidence/explanation/evidence/caveats
+    // are all still returned unchanged below for that rendering to use.
+    type: "payee_reputation",
+    payee: { name: payeeName || null, upiId },
     claim: verification.claim_text,
     verdict: verification.verdict,
     confidence: verification.confidence,
