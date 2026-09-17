@@ -94,6 +94,18 @@ export const IMAGE_DEEP_ENGINE_VERSION = "v2-gemini-vision-webdetect-deep";
 // to invalidate here, just the same missing resilience to add.)
 const IMAGE_DEEP_FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"];
 
+// Sept 17, 2026: added after a live, reproducing 503 on audio-transcript.ts's
+// identical cheap-tier call (see that file's header) showed this project is
+// currently exposed to real Gemini transient errors on the "cheap" tier too,
+// not just "reasoning" — and a sweep of every callStructured() call in the
+// codebase found image-analysis.quick was one of three cheap-tier calls
+// still missing a fallback net entirely (the others: quick-check.verdict,
+// video-analysis.quick — see those files' identical comments). Falls UP to
+// a stronger model rather than down, same reasoning as every other
+// cheap-tier fallback added today: a fully failed image Quick Check is
+// worse than occasionally spending more on the rare fallback case.
+const IMAGE_QUICK_FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-3.8-flash"];
+
 export interface ImageAnalysisResult {
   verdict: string;
   confidence: number;
@@ -235,6 +247,7 @@ export async function runImageQuickCheck(
     responseSchema: buildVisionSchema(BASE_VERDICTS),
     imageParts: [{ mimeType, data: imageBase64 }],
     timeoutMs: 20_000,
+    fallbackModels: IMAGE_QUICK_FALLBACK_MODELS,
     callSite: "image-analysis.quick",
   });
   return toResult(data, IMAGE_QUICK_ENGINE_VERSION, BASE_VERDICTS, [], language);

@@ -153,6 +153,19 @@ export async function POST(request: Request) {
   let textCacheHit = textCached !== null;
   const audioCacheHit = audioCached !== null;
 
+  // Sept 17, 2026 fix: track the cached_at value alongside textCacheHit
+  // rather than re-deriving it from `textCached` at response time (see the
+  // `cached_at:` line below). A real, live 500 surfaced this exact request
+  // ("Check failed" on the client) — "TypeError: Cannot read properties of
+  // null (reading 'cached_at')" — because textCacheHit can become true via
+  // the SEMANTIC match branch just below while `textCached` itself stays
+  // null (only `textSemanticMatch` gets set in that case). The old
+  // `(textCached as CachedVerification).cached_at` blew up exactly there.
+  // app/api/verify-video-combined/route.ts already had this right (it
+  // tracks its own `textCachedAt` the same way) — this brings the audio
+  // route in line with that, already-correct pattern.
+  let textCachedAt: string | null = textCached?.cached_at ?? null;
+
   // Semantic-cache fallback for the TEXT/transcript half only (Part 11's
   // "Semantic" layer, Sept 16, 2026 — see app/api/verify/route.ts's
   // identical comment for the full rationale). Never applied to the audio
@@ -169,6 +182,7 @@ export async function POST(request: Request) {
     if (textSemanticMatch) {
       textCacheHit = true;
       textCacheMatchType = "semantic";
+      textCachedAt = textSemanticMatch.cached_at;
     }
   }
 
@@ -306,7 +320,7 @@ export async function POST(request: Request) {
     evidence: transcriptRow.key_evidence,
     sources: transcriptRow.sources,
     cached: textCacheHit,
-    cached_at: textCacheHit ? (textCached as CachedVerification).cached_at : null,
+    cached_at: textCacheHit ? textCachedAt : null,
     secondary: audioRow
       ? {
           id: audioRow.id,

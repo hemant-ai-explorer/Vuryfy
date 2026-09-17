@@ -275,6 +275,7 @@ export async function runVideoQuickCheck(
     responseSchema: VIDEO_SCHEMA,
     videoFileRef: { fileUri, mimeType },
     timeoutMs: 120_000,
+    fallbackModels: VIDEO_QUICK_FALLBACK_MODELS,
     callSite: "video-analysis.quick",
   });
   return toResult(data, VIDEO_QUICK_ENGINE_VERSION, language);
@@ -320,6 +321,18 @@ const VIDEO_DEEP_RETRY_DELAYS_MS = [1000, 3000, 6000, 10_000];
 // tier's model) added as the second fallback so there are still two
 // genuinely distinct pools to fall back through.
 const VIDEO_DEEP_FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"];
+
+// Sept 17, 2026: added after a live, reproducing 503 on audio-transcript.ts's
+// identical cheap-tier call (see that file's header) showed this project is
+// currently exposed to real Gemini transient errors on the "cheap" tier too
+// — a sweep of every callStructured() call in the codebase found
+// video-analysis.quick was one of three cheap-tier calls still missing a
+// fallback net entirely (the others: quick-check.verdict, image-analysis.quick
+// — see those files' identical comments). Falls UP to a stronger model
+// rather than down, same reasoning as every other cheap-tier fallback added
+// today: a fully failed video Quick Check is worse than occasionally
+// spending more on the rare fallback case.
+const VIDEO_QUICK_FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-3.8-flash"];
 
 export async function runVideoDeepInvestigation(
   fileUri: string,
