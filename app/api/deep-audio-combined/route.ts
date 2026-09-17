@@ -122,6 +122,16 @@ export async function POST(request: Request) {
   let textCacheHit = textCached !== null;
   const audioCacheHit = audioCached !== null;
 
+  // Sept 17, 2026 fix: same null-dereference bug as
+  // app/api/verify-audio-combined/route.ts (see that file's identical
+  // comment) — textCacheHit can go true via the semantic-match branch
+  // below while `textCached` itself stays null, so the old
+  // `(textCached as CachedVerification).cached_at` in the response threw
+  // on exactly that path. Tracking `textCachedAt` alongside textCacheHit
+  // (same pattern app/api/deep-video-combined/route.ts already used)
+  // fixes it here too.
+  let textCachedAt: string | null = textCached?.cached_at ?? null;
+
   // Semantic-cache fallback for the TEXT/transcript half only — see
   // app/api/verify-audio-combined/route.ts's identical comment.
   let textCacheMatchType: "exact" | "semantic" | null = textCacheHit ? "exact" : null;
@@ -134,6 +144,7 @@ export async function POST(request: Request) {
     if (textSemanticMatch) {
       textCacheHit = true;
       textCacheMatchType = "semantic";
+      textCachedAt = textSemanticMatch.cached_at;
     }
   }
 
@@ -273,7 +284,7 @@ export async function POST(request: Request) {
     sources: transcriptRow.sources,
     caveats: transcriptRow.caveats,
     cached: textCacheHit,
-    cached_at: textCacheHit ? (textCached as CachedVerification).cached_at : null,
+    cached_at: textCacheHit ? textCachedAt : null,
     secondary: audioRow
       ? {
           id: audioRow.id,
