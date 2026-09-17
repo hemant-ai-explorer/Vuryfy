@@ -216,6 +216,12 @@ export async function POST(request: Request) {
   return NextResponse.json({
     id: verification.id,
     mode: "deep",
+    // Sept 17, 2026: see app/api/verify-payee/route.ts's identical comment
+    // — same `type`/`payee` addition so app/result/page.tsx's new
+    // payee_reputation branch can render Deep Investigation results the
+    // same way it renders Quick Check ones.
+    type: "payee_reputation",
+    payee: { name: payeeName || null, upiId },
     claim: verification.claim_text,
     verdict: verification.verdict,
     confidence: verification.confidence,

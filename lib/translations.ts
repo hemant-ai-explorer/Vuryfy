@@ -187,6 +187,18 @@ const en: Dictionary = {
   // const, same pattern as every other pipeline's disclaimer caveat.
   "payee.disclaimer":
     "This searches the public web for reports about this payee — it can't confirm who actually controls the payment ID, and finding nothing doesn't mean they're legitimate. Most real businesses and most scammers alike often have little to no searchable footprint.",
+  // Sept 17, 2026: payee-reputation results (Quick Check and Deep
+  // Investigation both) no longer show the raw True/False/Misleading/
+  // Unverified verdict word — those labels read as confusing or alarming
+  // for what is really an identity/reputation lookup, not a fact-check.
+  // See app/result/page.tsx's new payee_reputation branch: the result now
+  // always leads with the payee's own name/ID (same treatment the free
+  // QR-decode preview already gives it), then either this "no reports
+  // found" status line, or the existing red Scam warning card when the
+  // verdict actually is "Scam" — nothing else changes below that (why,
+  // evidence, caveats still render in full either way).
+  "result.payeeBadge": "PAYEE",
+  "result.payeeClear": "No public scam reports found for this payee.",
   "result.receiptEyebrow": "PAYMENT RECEIPT",
   "result.receiptBadge": "THIS LOOKS LIKE A PAYMENT RECEIPT",
   "result.receiptAmountUnclear": "Amount not clearly readable",
@@ -410,6 +422,8 @@ const hi: Dictionary = {
   "payee.investigateEyebrow": "इस प्राप्तकर्ता की जांच करें",
   "payee.disclaimer":
     "यह इस प्राप्तकर्ता के बारे में रिपोर्ट के लिए सार्वजनिक वेब पर खोज करता है — यह पुष्टि नहीं कर सकता कि पेमेंट ID पर वास्तव में किसका नियंत्रण है, और कुछ न मिलने का मतलब यह नहीं कि वे वैध हैं। ज़्यादातर असली व्यवसायों और ज़्यादातर धोखेबाज़ों, दोनों का अक्सर वेब पर बहुत कम या कोई खोजने योग्य निशान नहीं होता।",
+  "result.payeeBadge": "प्राप्तकर्ता",
+  "result.payeeClear": "इस प्राप्तकर्ता के लिए कोई सार्वजनिक धोखाधड़ी रिपोर्ट नहीं मिली।",
   "result.receiptEyebrow": "भुगतान रसीद",
   "result.receiptBadge": "यह एक भुगतान रसीद लगती है",
   "result.receiptAmountUnclear": "राशि स्पष्ट रूप से पढ़ी नहीं जा सकी",
