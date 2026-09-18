@@ -11,15 +11,26 @@ import Tesseract from "tesseract.js";
 // storage, none of Part 15's media-retention questions apply here, exactly
 // like QR.
 //
-// V1 scope: English only ("eng" traineddata). Vuryfy's multilingual design
-// (Part 11) is about the CLAIM text once extracted — canonical
-// representation, research in English, localized output — not about OCR
-// itself being multilingual. Real-world screenshots in Hindi/other launch
-// languages won't extract cleanly yet; adding language packs (Tesseract
-// supports "eng+hin" etc.) is a follow-up once the English path is proven
-// working, not bundled into this first cut ("build thin, not full", Part
-// 11 refinement #3, applied here to OCR the same way it was applied to the
-// AI Gateway).
+// Multilingual OCR — Sept 18, 2026. Originally shipped English-only ("V1
+// scope: English only... Real-world screenshots in Hindi/other launch
+// languages won't extract cleanly yet"), which surfaced as a real gap the
+// same day: the first real-world WhatsApp forward (Part 13's media-first
+// rework) was a Hindi print-media clipping with a specific box-office
+// claim, and English-only OCR found nothing, silently falling back to the
+// vision-only "is this image manipulated" analysis instead of ever
+// fact-checking the actual claim in the image. Extended to all 9 of the
+// app's launch languages (English + the 8 Indian languages translations.ts
+// already supports — see lib/translations.ts's header), rather than
+// Hindi-only, since any of them is equally likely to show up in a
+// real forward. Traded off deliberately against two real costs: (1) first
+// use downloads all 9 language packs rather than 1 (a few MB each,
+// cached by the browser/Tesseract worker after that — the same repeat-user
+// tradeoff already made for the audio/video launch-language work), and
+// (2) combined multi-language recognition is measurably slower than
+// single-language and can occasionally cross-recognize a Latin/Devanagari
+// mix on a low-quality photo — accepted as a fair price for not silently
+// missing the claim text entirely, which is strictly worse for a
+// fact-checking app than a slower or occasionally imperfect extraction.
 //
 // Downscales before recognition, same speed rationale as QR's downscale —
 // phone photos can be 4000px+ and Tesseract's recognition time scales with
@@ -28,6 +39,11 @@ import Tesseract from "tesseract.js";
 // needs materially more resolution than a QR code's coarse modules to
 // survive downscaling without becoming unreadable.
 const MAX_DIMENSION = 1600;
+
+// Tesseract language codes for all 9 launch languages — English plus the
+// 8 Indian languages lib/translations.ts already supports. Order doesn't
+// affect recognition; kept alphabetical by ISO 639-2 code for readability.
+const OCR_LANGUAGES = "ben+eng+guj+hin+kan+mal+mar+tam+tel";
 
 // Tesseract's own 0-100 confidence score for the whole recognized page.
 // Below this, treat it as "no usable text" rather than surfacing garbled
@@ -51,7 +67,7 @@ export async function extractTextFromImage(file: File): Promise<string> {
     if (!ctx) return "";
     ctx.drawImage(img, 0, 0, width, height);
 
-    const { data } = await Tesseract.recognize(canvas, "eng");
+    const { data } = await Tesseract.recognize(canvas, OCR_LANGUAGES);
     if (!data.text || data.confidence < MIN_CONFIDENCE) return "";
     return data.text.trim();
   } catch {
