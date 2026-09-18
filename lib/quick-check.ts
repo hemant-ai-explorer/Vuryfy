@@ -73,7 +73,24 @@ export interface QuickCheckResult {
   engine_version: string;
 }
 
-export const ENGINE_VERSION = "v1-gemini-tavily";
+// Sept 17, 2026: bumped v1 -> v2 after a real grounding gap surfaced on a
+// self-referential claim ("this recording was created using the Narakeet
+// AI voice generator", embedded in the recording's own transcript). Quick
+// Check returned "True"/95% reasoning only that Narakeet is a real,
+// capable TTS platform — evidence the claim is PLAUSIBLE, not evidence
+// THIS specific recording came from it. Deep Investigation on the
+// identical claim correctly returned "Unverified", recognizing the same
+// gap. Added an explicit rule to SYSTEM_PROMPT below (mirroring the
+// existing "Scam" verdict's "must be about this specific link/domain, not
+// the general category" standard) so Quick Check applies the same
+// discipline to any self-referential "this was made/verified/certified by
+// X" claim. This changes real verdict outcomes for this claim shape, so
+// unlike a pure fallback-model addition, this DOES need a version bump —
+// every route whose exact-match cache key is built from this constant
+// (verify/route.ts, and the text half of every *-combined route: audio,
+// video, image) keys off this exact string, so a stale pre-fix "True"
+// doesn't keep serving from cache indefinitely.
+export const ENGINE_VERSION = "v2-gemini-tavily";
 const VALID_VERDICTS = ["True", "False", "Misleading", "Unverified", "Scam"];
 
 const VERDICT_SCHEMA = {
@@ -109,6 +126,7 @@ const SYSTEM_PROMPT = `You are Vuryfy's claim-verification engine. You are given
 - Decide a verdict: "True", "False", "Misleading", "Unverified", or "Scam".
 - Use "Scam" only when the evidence specifically names or identifies THIS claim's exact link, domain, or entity as a scam, phishing site, or fraud operation — a report, blocklist entry, news article, or complaint that is actually about this specific link/domain/entity, not merely about the same general category or brand. Evidence that only describes how this type of scam usually works in general (e.g. a generic guide to phishing tactics, or an article about scams impersonating the same brand without naming this exact domain) is NOT sufficient on its own — that case is "Unverified", not "Scam", even if the claim's own wording sounds exactly like a textbook phishing attempt. Never choose "Scam" from the link or claim merely looking suspicious, unfamiliar, unofficial, or brand-adjacent with no evidence specifically about it — a confident false accusation is worse than an unresolved one.
 - For anything that is simply incorrect information but not a deliberate scam/fraud attempt, use "False" or "Misleading" as appropriate, not "Scam".
+- Some claims assert something about themselves or about the specific item being checked — e.g. "this recording/photo/document was made using X," "this was verified/certified by Y," "this comes from Z." Evidence that only confirms X/Y/Z is real, legitimate, or capable of that action is NOT sufficient to call such a claim "True" — that only shows the claim is plausible, not that THIS specific instance actually is what it claims to be. Only mark such a claim "True" if the evidence specifically confirms this exact instance (a report, record, or verification specifically about this item) — not merely that the named tool, organization, or service exists and does that kind of thing in general. Otherwise, use "Unverified". This is the same standard already required above for "Scam": evidence about the general category is never evidence about this specific case.
 - You may ONLY use the numbered evidence provided below — never rely on outside knowledge, and never invent a source. If the evidence is thin, outdated, or contradicts itself, prefer "Unverified" over guessing.
 - confidence is 0-100 and must reflect how well the evidence actually supports the verdict — weak or single-source evidence should never produce a high confidence score.
 - cited_evidence_ids must contain ONLY the bracketed numbers of evidence you actually relied on. Never include a number that wasn't given to you.
