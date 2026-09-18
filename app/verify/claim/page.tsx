@@ -62,6 +62,32 @@ function ClaimForm() {
   const [claim, setClaim] = useState("");
   const [submitting, setSubmitting] = useState<"quick" | "deep" | null>(null);
   const [error, setError] = useState("");
+  // WhatsApp submission MVP (Part 13, Sept 18, 2026) — see
+  // supabase/migrations/0016_whatsapp_link_codes.sql's header for the full
+  // design. Text/link claims only for now; QR/image/audio/video via
+  // WhatsApp is a deliberate next-phase extension, not built in this pass.
+  const [waCode, setWaCode] = useState<{ code: string; waLink: string } | null>(null);
+  const [waLoading, setWaLoading] = useState(false);
+  const [waError, setWaError] = useState("");
+
+  async function getWhatsAppLink() {
+    setWaLoading(true);
+    setWaError("");
+    try {
+      const r = await fetch("/api/whatsapp/link-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "quick", input_type: type }),
+      });
+      const d = await parseJsonResponse(r);
+      if (!r.ok) throw new Error(d.error || "Couldn't create a WhatsApp link.");
+      setWaCode({ code: d.code, waLink: d.wa_link });
+    } catch (e: any) {
+      setWaError(e.message);
+    } finally {
+      setWaLoading(false);
+    }
+  }
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -125,6 +151,34 @@ function ClaimForm() {
           </button>
         </div>
         {error && <p className="error">{error}</p>}
+        {/* WhatsApp submission MVP (Part 13, Sept 18, 2026) — English-only
+            for now, same flagged, known i18n gap as the new history page
+            (app/saved/page.tsx). */}
+        <div className="panel" style={{ marginTop: 28 }}>
+          <h2 style={{ fontSize: 16 }}>Prefer WhatsApp?</h2>
+          {waCode ? (
+            <>
+              <p className="sub" style={{ fontSize: 14, margin: "0 0 14px" }}>
+                Tap below, send the pre-filled code, then send your claim as your next WhatsApp message. We&apos;ll
+                run it as a Quick Check and show the result in your History.
+              </p>
+              <a
+                className="primary-link"
+                href={waCode.waLink}
+                target="_blank"
+                rel="noreferrer"
+                style={{ display: "block", textAlign: "center" }}
+              >
+                Open WhatsApp
+              </a>
+            </>
+          ) : (
+            <button className="secondary" onClick={getWhatsAppLink} disabled={waLoading}>
+              {waLoading ? "Generating…" : "Get a WhatsApp link"}
+            </button>
+          )}
+          {waError && <p className="error">{waError}</p>}
+        </div>
         <p className="hint">
           {t("claim.hintQrText")} <Link href="/verify/qr">{t("claim.hintQrLink")}</Link>
         </p>

@@ -116,6 +116,9 @@ export default function Home() {
           </div>
         </div>
         <div className="home-links">
+          <button className="text-button" onClick={() => router.push("/saved")}>
+            {t("home.history")}
+          </button>
           <button className="text-button" onClick={() => router.push("/settings")}>
             {t("home.settings")}
           </button>

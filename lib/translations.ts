@@ -116,6 +116,11 @@ const en: Dictionary = {
   "home.deepInvestigations": "Deep Investigations",
   "home.settings": "Settings",
   "home.signOut": "Sign out",
+  // Sept 18, 2026: added alongside the new history screen (app/saved/
+  // page.tsx) and the WhatsApp submission MVP. English-only for now —
+  // translate() falls back to this value for every other language until
+  // the other 8 dictionaries pick it up, same as any other missing key.
+  "home.history": "History",
   "home.noPlan": "You don't have an active plan yet.",
   "home.subEnding": "Your subscription is scheduled to end at the end of the current paid period.",
   "landing.eyebrow": "VERIFY WHAT MATTERS",
