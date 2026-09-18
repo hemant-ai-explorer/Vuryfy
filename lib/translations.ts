@@ -52,16 +52,52 @@
 // page, is templated with {name}/{id} placeholders substituted in code
 // (see app/verify/qr/page.tsx) rather than kept as JSX with embedded bold
 // text — a deliberate small simplification, not a bug.
-export type Language = "en" | "hi";
+// Sept 18, 2026: extended from English+Hindi to all 8 launch languages
+// Part 11 originally named. The 6 new dictionaries (kn/ml/ta/te/gu/bn) live
+// in their own files (lib/translations-<code>.ts) rather than inline here
+// — this file had already grown to ~60KB with just two languages, and a
+// single file holding all 8 would make every future edit to it a large,
+// risky rewrite. Each per-language file carries the same key set as `en`
+// below (checked by convention, not an automated test — translate() falls
+// back to English for a missing key, so a gap fails silently rather than
+// breaking the build, which is why key-parity matters even without
+// enforcement).
+import { kn } from "./translations-kn";
+import { ml } from "./translations-ml";
+import { ta } from "./translations-ta";
+import { te } from "./translations-te";
+import { gu } from "./translations-gu";
+import { bn } from "./translations-bn";
+import { mr } from "./translations-mr";
+
+// Sept 18, 2026 (later same day): added Marathi (mr) as a 9th language,
+// beyond Part 11's original 8-language list, per the user's direct request.
+// Same per-language-file pattern as kn/ml/ta/te/gu/bn above — see this
+// file's header comment for the full rationale.
+export type Language = "en" | "hi" | "kn" | "ml" | "ta" | "te" | "gu" | "bn" | "mr";
 
 export const SUPPORTED_LANGUAGES: { code: Language; label: string; nativeLabel: string }[] = [
   { code: "en", label: "English", nativeLabel: "English" },
   { code: "hi", label: "Hindi", nativeLabel: "हिन्दी" },
+  { code: "kn", label: "Kannada", nativeLabel: "ಕನ್ನಡ" },
+  { code: "ml", label: "Malayalam", nativeLabel: "മലയാളം" },
+  { code: "ta", label: "Tamil", nativeLabel: "தமிழ்" },
+  { code: "te", label: "Telugu", nativeLabel: "తెలుగు" },
+  { code: "gu", label: "Gujarati", nativeLabel: "ગુજરાતી" },
+  { code: "bn", label: "Bengali", nativeLabel: "বাংলা" },
+  { code: "mr", label: "Marathi", nativeLabel: "मराठी" },
 ];
 
 export const LANGUAGE_NAMES: Record<Language, string> = {
   en: "English",
   hi: "Hindi",
+  kn: "Kannada",
+  ml: "Malayalam",
+  ta: "Tamil",
+  te: "Telugu",
+  gu: "Gujarati",
+  bn: "Bengali",
+  mr: "Marathi",
 };
 
 type Dictionary = Record<string, string>;
@@ -523,7 +559,7 @@ const hi: Dictionary = {
   "verdict.OutOfContext": "संदर्भ से बाहर",
 };
 
-const DICTIONARIES: Record<Language, Dictionary> = { en, hi };
+const DICTIONARIES: Record<Language, Dictionary> = { en, hi, kn, ml, ta, te, gu, bn, mr };
 
 export function translate(language: Language, key: string): string {
   return DICTIONARIES[language]?.[key] ?? DICTIONARIES.en[key] ?? key;
@@ -553,5 +589,15 @@ export function translateVerdict(language: Language, verdict: string): string {
 }
 
 export function isSupportedLanguage(value: unknown): value is Language {
-  return value === "en" || value === "hi";
+  return (
+    value === "en" ||
+    value === "hi" ||
+    value === "kn" ||
+    value === "ml" ||
+    value === "ta" ||
+    value === "te" ||
+    value === "gu" ||
+    value === "bn" ||
+    value === "mr"
+  );
 }
