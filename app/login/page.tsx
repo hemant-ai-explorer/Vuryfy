@@ -49,6 +49,13 @@ function LoginForm() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [savingLanguage, setSavingLanguage] = useState(false);
+  // Sept 18, 2026 (later same day as the Marathi addition): the picker
+  // switched from a grid of one button per SUPPORTED_LANGUAGES entry to a
+  // dropdown, per the user's explicit request — with 9 languages now
+  // supported, a button grid was getting unwieldy. Behavior is otherwise
+  // identical: still shown at most once per account (see the hasPreference
+  // logic below), still redirects home on confirm. Defaults to "en".
+  const [selectedLanguage, setSelectedLanguage] = useState<Language>("en");
 
   const intentParam = searchParams.get("intent");
   const intent: "signin" | "signup" | null =
@@ -132,18 +139,24 @@ function LoginForm() {
           <p className="eyebrow">{t("language.eyebrow")}</p>
           <h1>{t("language.heading")}</h1>
           <p className="sub">{t("language.sub")}</p>
-          <div className="home-actions">
-            {SUPPORTED_LANGUAGES.map((lang) => (
-              <button
-                key={lang.code}
-                className="secondary-link"
-                style={{ width: "auto", border: 0, cursor: "pointer" }}
-                onClick={() => pickLanguage(lang.code)}
-                disabled={savingLanguage || hasPreference === null}
-              >
-                {savingLanguage ? t("language.saving") : lang.nativeLabel}
-              </button>
-            ))}
+          <div className="panel">
+            <select
+              value={selectedLanguage}
+              onChange={(e) => setSelectedLanguage(e.target.value as Language)}
+              disabled={savingLanguage || hasPreference === null}
+            >
+              {SUPPORTED_LANGUAGES.map((lang) => (
+                <option key={lang.code} value={lang.code}>
+                  {lang.nativeLabel}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() => pickLanguage(selectedLanguage)}
+              disabled={savingLanguage || hasPreference === null}
+            >
+              {savingLanguage ? t("language.saving") : t("language.continue")}
+            </button>
           </div>
         </section>
       </main>

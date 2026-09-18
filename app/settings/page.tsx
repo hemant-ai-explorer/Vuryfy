@@ -51,19 +51,24 @@ export default function SettingsPage() {
           <p className="sub" style={{ margin: "0 0 18px", fontSize: 15 }}>
             {t("settings.languageSub")}
           </p>
-          <div className="home-actions" style={{ justifyContent: "flex-start" }}>
+          {/* Sept 18, 2026 (later same day as the Marathi addition): switched
+              from a button grid (one per SUPPORTED_LANGUAGES entry) to a
+              dropdown, matching the same change on the sign-up language
+              picker (app/login/page.tsx) — with 9 languages now supported, a
+              button grid was getting unwieldy. Still auto-saves immediately
+              on selection, same as the old onClick-per-button behavior. */}
+          <select
+            value={language}
+            onChange={(e) => pick(e.target.value as Language)}
+            disabled={saving}
+            style={{ maxWidth: 320 }}
+          >
             {SUPPORTED_LANGUAGES.map((lang) => (
-              <button
-                key={lang.code}
-                className={lang.code === language ? "primary-link" : "secondary-link"}
-                style={{ width: "auto", height: 48, padding: "0 20px", border: 0, cursor: "pointer" }}
-                onClick={() => pick(lang.code)}
-                disabled={saving}
-              >
+              <option key={lang.code} value={lang.code}>
                 {lang.nativeLabel}
-              </button>
+              </option>
             ))}
-          </div>
+          </select>
           {saving && <p className="hint">{t("settings.saving")}</p>}
           {saved && !saving && <p className="hint">{t("settings.saved")}</p>}
         </div>
