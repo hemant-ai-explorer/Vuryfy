@@ -1,8 +1,8 @@
 import crypto from "crypto";
 
-// Helpers for the WhatsApp submission MVP (Part 13) — see
-// supabase/migrations/0016_whatsapp_link_codes.sql's header for the full
-// design.
+// Helpers for the WhatsApp submission flow (Part 13) — see
+// supabase/migrations/0016_whatsapp_link_codes.sql and 0017_whatsapp_
+// submissions.sql for the full design.
 
 // Generates the one-time code shown in-app and sent as the user's first
 // WhatsApp message. Avoids visually ambiguous characters (0/O, 1/I/L)
@@ -60,4 +60,25 @@ export function verifyTwilioSignature(
   // mismatched lengths rather than returning false).
   if (expectedBuf.length !== signatureBuf.length) return false;
   return crypto.timingSafeEqual(expectedBuf, signatureBuf);
+}
+
+// Twilio media URLs (MediaUrl0, MediaUrl1, ...) require HTTP Basic Auth
+// with the Account SID as username and Auth Token as password — this is
+// separate from webhook signature validation above. Used when a linked
+// phone forwards a photo, to pull the actual image bytes server-side
+// before re-uploading them to our own temp-whatsapp-uploads bucket (see
+// app/api/whatsapp/webhook/route.ts).
+export async function downloadTwilioMedia(
+  mediaUrl: string,
+  accountSid: string,
+  authToken: string
+): Promise<{ bytes: ArrayBuffer; contentType: string }> {
+  const auth = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
+  const res = await fetch(mediaUrl, { headers: { Authorization: `Basic ${auth}` } });
+  if (!res.ok) {
+    throw new Error(`Twilio media download failed with status ${res.status}`);
+  }
+  const bytes = await res.arrayBuffer();
+  const contentType = res.headers.get("content-type") || "application/octet-stream";
+  return { bytes, contentType };
 }

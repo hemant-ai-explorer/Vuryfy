@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { extractTextFromImage } from "@/lib/decode-image-text";
@@ -47,11 +47,25 @@ import { parseJsonResponse } from "@/lib/safe-json";
 // client-side, the moment a photo is chosen — no network call happens
 // until the user explicitly presses one of the mode buttons below, same
 // no-surprise-cost principle as every other confirm screen in the app.
-export default function VerifyImagePage() {
+//
+// WhatsApp media-first flow (Part 13 rework, Sept 18, 2026) — see
+// supabase/migrations/0017_whatsapp_submissions.sql and app/page.tsx's
+// "continue from WhatsApp" banner. Arriving here via ?whatsapp=<id> means
+// a photo was forwarded on WhatsApp and is waiting server-side; on mount
+// we fetch its bytes from /api/whatsapp/pending/[id]/image, build a plain
+// File from them, and hand it to the SAME handleFile() used for a normal
+// file-picker choice — the OCR + downscale + combined-buttons flow below
+// is completely unchanged, and doesn't know or care where the photo came
+// from. Needs useSearchParams(), so this file now needs a Suspense
+// boundary at build time — see app/verify/claim/page.tsx (rewritten in
+// this same pass) for the identical pattern.
+function ImageForm() {
   const router = useRouter();
   const supabase = createClient();
   const { t } = useLanguage();
+  const searchParams = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const whatsappId = searchParams.get("whatsapp");
 
   const [processing, setProcessing] = useState(false);
   const [processError, setProcessError] = useState("");
@@ -62,6 +76,7 @@ export default function VerifyImagePage() {
     "combined-quick" | "combined-deep" | "vision-quick" | "vision-deep" | null
   >(null);
   const [submitError, setSubmitError] = useState("");
+  const [loadingWaImage, setLoadingWaImage] = useState(!!whatsappId);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -85,6 +100,23 @@ export default function VerifyImagePage() {
       setProcessing(false);
     }
   }
+
+  useEffect(() => {
+    if (!whatsappId) return;
+    setLoadingWaImage(true);
+    fetch(`/api/whatsapp/pending/${whatsappId}/image`)
+      .then((r) => {
+        if (!r.ok) throw new Error("not found");
+        return r.blob();
+      })
+      .then((blob) => {
+        const file = new File([blob], "whatsapp-image.jpg", { type: blob.type || "image/jpeg" });
+        return handleFile(file);
+      })
+      .catch(() => setProcessError(t("qr.decodeErrorGeneric")))
+      .finally(() => setLoadingWaImage(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [whatsappId]);
 
   async function submitCombined(mode: "quick" | "deep") {
     if (!prepared || !ocrText) return;
@@ -168,6 +200,7 @@ export default function VerifyImagePage() {
 
         {!hasImage && (
           <>
+            {loadingWaImage && <p className="hint">Loading your photo from WhatsApp…</p>}
             <input
               ref={fileInputRef}
               id="image-file"
@@ -238,5 +271,16 @@ export default function VerifyImagePage() {
         )}
       </section>
     </main>
+  );
+}
+
+// useSearchParams() requires a Suspense boundary at build time — see
+// app/verify/claim/page.tsx and app/result/page.tsx for the same pattern
+// already used elsewhere in this app.
+export default function VerifyImagePage() {
+  return (
+    <Suspense fallback={null}>
+      <ImageForm />
+    </Suspense>
   );
 }

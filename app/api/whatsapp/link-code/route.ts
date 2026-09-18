@@ -3,11 +3,13 @@ import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateLinkCode } from "@/lib/whatsapp";
 
-// Generates a one-time code + wa.me deep link for the WhatsApp submission
-// method (Part 13) — MVP scope is text/link Quick Check claims only, see
-// supabase/migrations/0016_whatsapp_link_codes.sql's header for the full
-// design and rationale. Called from app/verify/claim/page.tsx's "Get a
-// WhatsApp link" step.
+// Generates a one-time code + wa.me deep link that starts a WhatsApp link
+// session (Part 13 rework) — see supabase/migrations/0017_whatsapp_
+// submissions.sql for the full design. Once linked, the phone can forward
+// text/a link OR a photo as separate messages; no mode/type needs to be
+// chosen up front anymore, since the app decides Quick Check vs Deep
+// Investigation later, per submission. Called from app/verify/claim/
+// page.tsx and app/verify/image/page.tsx's "Get a WhatsApp link" step.
 export const maxDuration = 30;
 
 const CODE_TTL_MINUTES = 15;
@@ -28,10 +30,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  const body = await request.json().catch(() => null);
-  const mode: "quick" | "deep" = body?.mode === "deep" ? "deep" : "quick";
-  const inputType: "text" | "link" = body?.input_type === "link" ? "link" : "text";
-
   const whatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER;
   if (!whatsappNumber) {
     console.error("[whatsapp/link-code] NEXT_PUBLIC_WHATSAPP_NUMBER is not set");
@@ -48,8 +46,6 @@ export async function POST(request: Request) {
     const { error } = await admin.from("whatsapp_link_codes").insert({
       user_id: user.id,
       code,
-      mode,
-      input_type: inputType,
       expires_at: expiresAt,
     });
     if (!error) {

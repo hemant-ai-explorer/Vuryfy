@@ -12,6 +12,7 @@ type Subscription = {
   cancel_at_period_end: boolean;
   current_period_end: string;
 } | null;
+type PendingWhatsApp = { id: string; input_type: "text" | "image"; preview: string | null } | null;
 
 // Localized Sept 16, 2026 as part of Phase 1 of the multilingual rollout —
 // see lib/translations.ts's header for scope. Every static string here now
@@ -26,6 +27,10 @@ export default function Home() {
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [credits, setCredits] = useState<Credits | null>(null);
   const [subscription, setSubscription] = useState<Subscription>(null);
+  // WhatsApp media-first flow (Part 13 rework, Sept 18, 2026) — see
+  // supabase/migrations/0017_whatsapp_submissions.sql. English-only for
+  // now, same flagged, known i18n gap as the rest of the WhatsApp UI.
+  const [pendingWa, setPendingWa] = useState<PendingWhatsApp>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setSignedIn(!!data.user));
@@ -41,12 +46,25 @@ export default function Home() {
         setSubscription(d.subscription);
       })
       .catch(() => {});
+    fetch("/api/whatsapp/pending")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setPendingWa(d?.pending ?? null))
+      .catch(() => {});
   }, [signedIn]);
 
   async function logout() {
     await supabase.auth.signOut();
     setSignedIn(false);
     router.refresh();
+  }
+
+  function continueWhatsApp() {
+    if (!pendingWa) return;
+    if (pendingWa.input_type === "image") {
+      router.push(`/verify/image?whatsapp=${pendingWa.id}`);
+    } else {
+      router.push(`/verify/claim?type=text&whatsapp=${pendingWa.id}`);
+    }
   }
 
   if (signedIn === null) return null;
@@ -85,6 +103,22 @@ export default function Home() {
         <p className="eyebrow">{t("home.eyebrow")}</p>
         <h1>{t("home.heading")}</h1>
         <p className="sub">{t("home.sub")}</p>
+        {pendingWa && (
+          <div className="panel" style={{ marginBottom: 20 }}>
+            <p style={{ margin: "0 0 8px", fontWeight: 600 }}>
+              {pendingWa.input_type === "image"
+                ? "You have a photo submitted via WhatsApp"
+                : "You have a claim submitted via WhatsApp"}
+            </p>
+            {pendingWa.preview && (
+              <p className="sub" style={{ fontSize: 14, margin: "0 0 12px" }}>
+                &ldquo;{pendingWa.preview}
+                {pendingWa.preview.length >= 80 ? "…" : ""}&rdquo;
+              </p>
+            )}
+            <button onClick={continueWhatsApp}>Continue</button>
+          </div>
+        )}
         <div className="home-actions">
           <Link className="primary-link" href="/verify/claim?type=text">
             {t("home.verifyText")}

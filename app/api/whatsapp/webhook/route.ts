@@ -1,38 +1,43 @@
 import { NextResponse } from "next/server";
+import crypto from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { normalizeWhatsAppPhone, verifyTwilioSignature } from "@/lib/whatsapp";
-import { runQuickCheck, normalizeClaim } from "@/lib/quick-check";
-import { getUserLanguage } from "@/lib/user-language";
+import { normalizeWhatsAppPhone, verifyTwilioSignature, downloadTwilioMedia } from "@/lib/whatsapp";
 
-// Twilio's inbound-message webhook for the WhatsApp submission MVP (Part
-// 13) — see supabase/migrations/0016_whatsapp_link_codes.sql's header for
-// the full design. Twilio calls this directly with no Vuryfy session or
-// cookie, so identity comes entirely from matching the message's content
-// and sender against a whatsapp_link_codes row, never from Supabase auth
-// — every DB access here uses the admin (service_role) client.
-//
-// Twilio request signature validation (lib/whatsapp.ts) confirms the
-// request actually came from Twilio and wasn't forged by someone who
+// Twilio's inbound-message webhook — WhatsApp media-first flow (Part 13
+// rework, Sept 18, 2026). Twilio calls this directly with no Vuryfy
+// session or cookie, so identity comes entirely from matching the
+// message's content and sender against a whatsapp_link_codes row, never
+// from Supabase auth — every DB access here uses the admin (service_role)
+// client. Twilio request signature validation (lib/whatsapp.ts) confirms
+// the request actually came from Twilio and wasn't forged by someone who
 // discovered this URL.
 //
-// Deliberately simpler than app/api/verify/route.ts's full pipeline: no
-// exact/semantic cache lookup, no payment-receipt/payment-request
-// carve-outs — just decrement credit -> runQuickCheck -> insert
-// verification, mirroring only that route's credit-safety half (reserve,
-// refund on infra failure). Flagged here as a known simplification to
-// close later, not an oversight — same "ship the mechanism thin first,
-// extend later" pattern used everywhere else in this project.
+// This route now does two things only: (1) link a phone to an account via
+// a one-time code, or (2) capture whatever the linked phone forwards next
+// — text/a link, or a photo — into whatsapp_submissions, and reply with a
+// short "open the app" acknowledgement. It NEVER runs a Quick Check, never
+// touches credits, and never writes to `verifications` — that all happens
+// afterward through the app's normal /api/verify or /api/verify-image
+// routes, once the user opens the pending submission and picks Quick
+// Check or Deep Investigation themselves, exactly like any other
+// submission. See supabase/migrations/0017_whatsapp_submissions.sql.
 //
-// No WhatsApp reply after a claim is processed, per the user's explicit
-// choice — WhatsApp is purely an upload channel here; the verdict is
-// viewed in the app (app/saved/page.tsx's history list) once the new
-// verification row lands. The ONE reply this route ever sends is a short
-// operational confirmation on successful LINKING ("you're connected,
-// send your claim next") — never the verdict itself.
+// A linked phone is no longer single-use: LINK_SESSION_HOURS below is how
+// long a link stays usable after the user sends their code, so several
+// items can be forwarded before they return to the app. Audio and video
+// forwards are acknowledged as "not supported yet" — same scoped-build
+// pattern used throughout this project (QR -> image -> audio/video; EN+HI
+// -> remaining languages) rather than building all four media types in
+// one pass.
 export const maxDuration = 60;
 
 const MIN_CLAIM_LENGTH = 5;
-const RELINK_WINDOW_MINUTES = 15;
+const LINK_SESSION_HOURS = 24;
+const ALLOWED_IMAGE_TYPES: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
 
 function twiml(message?: string): NextResponse {
   const body = message
@@ -54,9 +59,10 @@ export async function POST(request: Request) {
   });
 
   const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const signature = request.headers.get("x-twilio-signature");
-  if (!authToken) {
-    console.error("[whatsapp/webhook] TWILIO_AUTH_TOKEN is not set — refusing all requests");
+  if (!authToken || !accountSid) {
+    console.error("[whatsapp/webhook] TWILIO_AUTH_TOKEN / TWILIO_ACCOUNT_SID not set — refusing all requests");
     return new NextResponse("Not configured", { status: 500 });
   }
   if (!verifyTwilioSignature(authToken, request.url, paramsObj, signature)) {
@@ -67,6 +73,8 @@ export async function POST(request: Request) {
   const from = paramsObj["From"] || "";
   const bodyText = (paramsObj["Body"] || "").trim();
   const numMedia = parseInt(paramsObj["NumMedia"] || "0", 10);
+  const mediaUrl = paramsObj["MediaUrl0"] || "";
+  const mediaContentType = paramsObj["MediaContentType0"] || "";
   const phone = normalizeWhatsAppPhone(from);
 
   if (!phone) {
@@ -93,7 +101,7 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (codeRow) {
-      const newExpiry = new Date(Date.now() + RELINK_WINDOW_MINUTES * 60 * 1000).toISOString();
+      const newExpiry = new Date(Date.now() + LINK_SESSION_HOURS * 60 * 60 * 1000).toISOString();
       const { error: linkError } = await admin
         .from("whatsapp_link_codes")
         .update({ phone_number: phone, linked_at: nowIso, expires_at: newExpiry })
@@ -105,18 +113,17 @@ export async function POST(request: Request) {
       }
 
       return twiml(
-        "You're connected to Vuryfy. Send the text, claim, or link you want checked as your next message."
+        "You're connected to Vuryfy. Forward text, a link, or a photo and we'll open it in the app for you to check."
       );
     }
   }
 
-  // Step 2: is this phone number currently linked to a pending (unconsumed,
-  // unexpired) code? If so, THIS message is the claim to verify.
+  // Step 2: is this phone currently within an active link session? If so,
+  // THIS message is a new submission to capture.
   const { data: linkedRow } = await admin
     .from("whatsapp_link_codes")
-    .select("id, user_id, input_type")
+    .select("id, user_id")
     .eq("phone_number", phone)
-    .is("consumed_at", null)
     .not("linked_at", "is", null)
     .gt("expires_at", nowIso)
     .order("linked_at", { ascending: false })
@@ -130,95 +137,70 @@ export async function POST(request: Request) {
     return twiml();
   }
 
+  const userId = linkedRow.user_id;
+
   if (numMedia > 0) {
-    return twiml(
-      "Photo, audio, and video submissions over WhatsApp aren't available yet — only text claims are supported right now. Please use the Vuryfy app for other formats."
-    );
+    const ext = ALLOWED_IMAGE_TYPES[mediaContentType];
+    if (!ext) {
+      return twiml(
+        "Only photos are supported over WhatsApp right now — audio and video aren't yet. Please use the Vuryfy app for those."
+      );
+    }
+    if (!mediaUrl) {
+      return twiml("That photo couldn't be read. Please try forwarding it again.");
+    }
+
+    let bytes: ArrayBuffer;
+    try {
+      const downloaded = await downloadTwilioMedia(mediaUrl, accountSid, authToken);
+      bytes = downloaded.bytes;
+    } catch (err) {
+      console.error("[whatsapp/webhook] media download failed:", err);
+      return twiml("That photo couldn't be downloaded. Please try forwarding it again.");
+    }
+
+    const storagePath = `${userId}/${crypto.randomUUID()}.${ext}`;
+    const { error: uploadError } = await admin.storage
+      .from("temp-whatsapp-uploads")
+      .upload(storagePath, Buffer.from(bytes), { contentType: mediaContentType, upsert: false });
+
+    if (uploadError) {
+      console.error("[whatsapp/webhook] storage upload failed:", uploadError);
+      return twiml("That photo couldn't be saved. Please try again from the app.");
+    }
+
+    const { error: insertError } = await admin.from("whatsapp_submissions").insert({
+      user_id: userId,
+      phone_number: phone,
+      input_type: "image",
+      storage_path: storagePath,
+      mime_type: mediaContentType,
+    });
+
+    if (insertError) {
+      console.error("[whatsapp/webhook] whatsapp_submissions insert failed (image):", insertError);
+      await admin.storage.from("temp-whatsapp-uploads").remove([storagePath]);
+      return twiml("That photo couldn't be saved. Please try again from the app.");
+    }
+
+    return twiml("Got it — open the Vuryfy app to continue checking your photo.");
   }
 
   if (bodyText.length < MIN_CLAIM_LENGTH) {
-    return twiml("That message is too short to check. Please send a longer claim or statement.");
+    return twiml("That message is too short to check. Please send a longer claim, link, or a photo.");
   }
 
-  const userId = linkedRow.user_id;
-
-  // Same atomic conditional decrement as app/api/verify/route.ts — only
-  // succeeds if the user actually has a Quick Check left.
-  const { data: remaining, error: rpcError } = await admin.rpc("decrement_quick_check", {
-    p_user_id: userId,
-  });
-
-  if (rpcError) {
-    console.error("[whatsapp/webhook] decrement_quick_check RPC failed:", rpcError);
-    return twiml("Couldn't check your credit balance right now. Please try again from the app.");
-  }
-
-  if (remaining === null || remaining === undefined) {
-    return twiml("You're out of Quick Check credits. Upgrade your plan in the app to continue.");
-  }
-
-  const language = await getUserLanguage(admin, userId);
-
-  let result;
-  try {
-    result = await runQuickCheck(bodyText, language);
-  } catch (err) {
-    console.error("[whatsapp/webhook] Quick Check pipeline failed (refunding credit):", err);
-    const { error: refundError } = await admin.rpc("refund_quick_check", { p_user_id: userId });
-    if (refundError) {
-      console.error("[whatsapp/webhook] refund_quick_check RPC ALSO failed:", refundError);
-    }
-    await admin.from("credit_transactions").insert([
-      { user_id: userId, credit_type: "quick_check", amount: -1, reason: "quick_check_reserved" },
-      { user_id: userId, credit_type: "quick_check", amount: 1, reason: "quick_check_refunded_infra_error" },
-    ]);
-    return twiml("That check couldn't be completed. Please try again from the app.");
-  }
-
-  const normalizedClaim = normalizeClaim(bodyText);
-
-  const { data: verification, error: insertError } = await admin
-    .from("verifications")
-    .insert({
-      user_id: userId,
-      input_type: linkedRow.input_type,
-      claim_text: bodyText,
-      normalized_claim: normalizedClaim,
-      verdict: result.verdict,
-      confidence: result.confidence,
-      summary: result.summary,
-      key_evidence: result.key_evidence,
-      sources: result.sources,
-      engine_version: result.engine_version,
-      credit_charged: true,
-    })
-    .select()
-    .single();
-
-  if (insertError || !verification) {
-    console.error("[whatsapp/webhook] verifications insert failed:", insertError);
-    return twiml("That check ran but couldn't be saved. Please try again from the app.");
-  }
-
-  const { error: txnError } = await admin.from("credit_transactions").insert({
+  const { error: insertError } = await admin.from("whatsapp_submissions").insert({
     user_id: userId,
-    credit_type: "quick_check",
-    amount: -1,
-    reason: "quick_check_completed",
-    verification_id: verification.id,
+    phone_number: phone,
+    input_type: "text",
+    claim_text: bodyText,
   });
-  if (txnError) {
-    console.error("[whatsapp/webhook] credit_transactions insert failed:", txnError);
+
+  if (insertError) {
+    console.error("[whatsapp/webhook] whatsapp_submissions insert failed (text):", insertError);
+    return twiml("That couldn't be saved. Please try again from the app.");
   }
 
-  const { error: consumeError } = await admin
-    .from("whatsapp_link_codes")
-    .update({ consumed_at: nowIso, verification_id: verification.id })
-    .eq("id", linkedRow.id);
-  if (consumeError) {
-    console.error("[whatsapp/webhook] failed to mark code consumed:", consumeError);
-  }
-
-  // No result reply — see the file header for why.
-  return twiml();
+  return twiml("Got it — open the Vuryfy app to continue checking your claim.");
 }
