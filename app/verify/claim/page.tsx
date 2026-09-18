@@ -43,6 +43,7 @@ function ClaimForm() {
   const { t } = useLanguage();
   const type: "text" | "url" = searchParams.get("type") === "url" ? "url" : "text";
   const backHref = `/verify/claim?type=${type}`;
+  const whatsappId = searchParams.get("whatsapp");
 
   const copy =
     type === "url"
@@ -62,12 +63,49 @@ function ClaimForm() {
   const [claim, setClaim] = useState("");
   const [submitting, setSubmitting] = useState<"quick" | "deep" | null>(null);
   const [error, setError] = useState("");
+  // WhatsApp media-first flow (Part 13 rework, Sept 18, 2026) — see
+  // supabase/migrations/0017_whatsapp_submissions.sql. A linked phone can
+  // forward text/a link OR a photo (app/verify/image/page.tsx handles the
+  // photo case); this screen just pre-fills the textarea from a pending
+  // text submission when arriving via ?whatsapp=<id> — the rest of the
+  // flow (choosing Quick Check vs Deep Investigation) is unchanged.
+  const [waCode, setWaCode] = useState<{ code: string; waLink: string } | null>(null);
+  const [waLoading, setWaLoading] = useState(false);
+  const [waError, setWaError] = useState("");
+  const [loadingWaSubmission, setLoadingWaSubmission] = useState(!!whatsappId);
+
+  async function getWhatsAppLink() {
+    setWaLoading(true);
+    setWaError("");
+    try {
+      const r = await fetch("/api/whatsapp/link-code", { method: "POST" });
+      const d = await parseJsonResponse(r);
+      if (!r.ok) throw new Error(d.error || "Couldn't create a WhatsApp link.");
+      setWaCode({ code: d.code, waLink: d.wa_link });
+    } catch (e: any) {
+      setWaError(e.message);
+    } finally {
+      setWaLoading(false);
+    }
+  }
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) router.replace("/login");
     });
   }, [router, supabase]);
+
+  useEffect(() => {
+    if (!whatsappId) return;
+    setLoadingWaSubmission(true);
+    fetch(`/api/whatsapp/pending/${whatsappId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.input_type === "text" && d.claim_text) setClaim(d.claim_text);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingWaSubmission(false));
+  }, [whatsappId]);
 
   async function submit(mode: "quick" | "deep") {
     if (claim.trim().length < 5) return;
@@ -103,6 +141,7 @@ function ClaimForm() {
         <p className="eyebrow">{copy.eyebrow}</p>
         <h1>{copy.heading}</h1>
         <p className="sub">{copy.sub}</p>
+        {loadingWaSubmission && <p className="hint">Loading your claim from WhatsApp…</p>}
         <textarea
           value={claim}
           onChange={(e) => setClaim(e.target.value)}
@@ -125,6 +164,33 @@ function ClaimForm() {
           </button>
         </div>
         {error && <p className="error">{error}</p>}
+        {/* WhatsApp media-first flow — English-only for now, same flagged,
+            known i18n gap as the rest of this feature. */}
+        <div className="panel" style={{ marginTop: 28 }}>
+          <h2 style={{ fontSize: 16 }}>Prefer WhatsApp?</h2>
+          {waCode ? (
+            <>
+              <p className="sub" style={{ fontSize: 14, margin: "0 0 14px" }}>
+                Tap below and send the pre-filled code. Once connected, forward text, a link, or a photo — each one
+                will show up here in the app for you to check, for the next 24 hours.
+              </p>
+              <a
+                className="primary-link"
+                href={waCode.waLink}
+                target="_blank"
+                rel="noreferrer"
+                style={{ display: "block", textAlign: "center" }}
+              >
+                Open WhatsApp
+              </a>
+            </>
+          ) : (
+            <button className="secondary" onClick={getWhatsAppLink} disabled={waLoading}>
+              {waLoading ? "Generating…" : "Get a WhatsApp link"}
+            </button>
+          )}
+          {waError && <p className="error">{waError}</p>}
+        </div>
         <p className="hint">
           {t("claim.hintQrText")} <Link href="/verify/qr">{t("claim.hintQrLink")}</Link>
         </p>

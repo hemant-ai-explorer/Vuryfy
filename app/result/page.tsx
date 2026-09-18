@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useLanguage } from "@/app/providers/language-provider";
 import { translateVerdict } from "@/lib/translations";
 import { parseJsonResponse } from "@/lib/safe-json";
@@ -81,18 +81,51 @@ type Result = {
   return_to?: string;
 };
 
-export default function ResultPage() {
+function ResultView() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { t, language } = useLanguage();
   const [r, setR] = useState<Result | null>(null);
+  const [notFound, setNotFound] = useState(false);
   const [payeeChecking, setPayeeChecking] = useState<"quick" | "deep" | null>(null);
   const [payeeCheckError, setPayeeCheckError] = useState("");
 
+  // Sept 18, 2026: added the fetch-by-id fallback alongside the WhatsApp
+  // submission MVP and the new history list (app/saved/page.tsx) — a past
+  // verification opened from either of those has no sessionStorage entry
+  // to read (sessionStorage only ever holds the result of the check the
+  // browser tab just submitted interactively), so this falls back to
+  // GET /api/verifications/[id] whenever sessionStorage comes up empty
+  // but a ?id= is present. See that route for the response-shape
+  // contract, deliberately matched to what /api/verify already returns so
+  // no rendering code below needs to know which path a result came from.
   useEffect(() => {
     const x = sessionStorage.getItem("vuryfy_result");
-    if (x) setR(JSON.parse(x));
-    else router.replace("/");
-  }, [router]);
+    if (x) {
+      setR(JSON.parse(x));
+      return;
+    }
+    const id = searchParams.get("id");
+    if (!id) {
+      router.replace("/");
+      return;
+    }
+    fetch(`/api/verifications/${id}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((d) => setR(d))
+      .catch(() => setNotFound(true));
+  }, [router, searchParams]);
+
+  if (notFound) {
+    return (
+      <main className="shell narrow">
+        <section className="hero">
+          <h1>Verification not found.</h1>
+          <p className="sub">This result doesn&apos;t exist, or isn&apos;t yours to view.</p>
+        </section>
+      </main>
+    );
+  }
 
   if (!r) return null;
 
@@ -449,5 +482,17 @@ export default function ResultPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+// useSearchParams() requires a Suspense boundary at build time (same
+// convention as app/login/page.tsx and app/verify/claim/page.tsx) —
+// added here alongside the fetch-by-id fallback above, since this page
+// previously never read from the URL at all.
+export default function ResultPage() {
+  return (
+    <Suspense fallback={null}>
+      <ResultView />
+    </Suspense>
   );
 }
