@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { transcribeAudio } from "@/lib/audio-transcript";
+import { checkContentSafety, ContentFlaggedError, hashBase64 } from "@/lib/content-safety";
 
 // Route-level execution budget (Sept 2026 fix — see app/api/deep/route.ts's
 // comment, and app/api/transcribe-video/route.ts's original discovery of
@@ -60,6 +62,27 @@ export async function POST(request: Request) {
   }
   if (!ALLOWED_MIME_TYPES.has(mimeType)) {
     return NextResponse.json({ error: "Unsupported audio type." }, { status: 400 });
+  }
+
+  const admin = createAdminClient();
+
+  // Content safety (Part 15, Sept 19, 2026) — scan before this free
+  // preview step reaches an AI provider. See lib/content-safety.ts's file
+  // header (currently a stub; no real hash-matching provider is wired in
+  // yet).
+  try {
+    await checkContentSafety({
+      admin,
+      userId: user.id,
+      contentType: "audio",
+      contentHash: hashBase64(audioBase64),
+      sourceRoute: "transcribe-audio",
+    });
+  } catch (err) {
+    if (err instanceof ContentFlaggedError) {
+      return NextResponse.json({ error: "This content can't be processed." }, { status: 422 });
+    }
+    throw err;
   }
 
   try {

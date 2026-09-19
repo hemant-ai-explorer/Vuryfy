@@ -7,6 +7,7 @@ import { computeCacheKey, getCachedVerification, writeCache, type CachedVerifica
 import { detectPaymentReceipt } from "@/lib/detect-payment-receipt";
 import { getUserLanguage } from "@/lib/user-language";
 import { translate } from "@/lib/translations";
+import { checkContentSafety, ContentFlaggedError, hashBase64 } from "@/lib/content-safety";
 
 // Route-level execution budget (Sept 2026 fix — see app/api/deep/route.ts's
 // comment for the full rationale). This route runs two AI pipelines in
@@ -88,6 +89,25 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+
+  // Content safety (Part 15, Sept 19, 2026) — scan before any credit is
+  // charged or the image reaches an AI provider. See lib/content-safety.ts's
+  // file header (currently a stub; no real hash-matching provider is wired
+  // in yet).
+  try {
+    await checkContentSafety({
+      admin,
+      userId: user.id,
+      contentType: "image",
+      contentHash: hashBase64(imageBase64),
+      sourceRoute: "verify-image-combined",
+    });
+  } catch (err) {
+    if (err instanceof ContentFlaggedError) {
+      return NextResponse.json({ error: "This content can't be processed." }, { status: 422 });
+    }
+    throw err;
+  }
 
   const receipt = detectPaymentReceipt(ocrText);
   if (receipt) {

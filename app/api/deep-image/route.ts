@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { runImageDeepInvestigation } from "@/lib/image-analysis";
 import { normalizeClaim } from "@/lib/quick-check";
 import { getUserLanguage } from "@/lib/user-language";
+import { checkContentSafety, ContentFlaggedError, hashBase64 } from "@/lib/content-safety";
 
 // Route-level execution budget (Sept 2026 fix — see app/api/deep/route.ts's
 // comment for the full rationale). 60 is Hobby's max; without it Vercel's
@@ -53,6 +54,26 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+
+  // Content safety (Part 15, Sept 19, 2026) — scan before any credit is
+  // charged or the image reaches an AI provider. See lib/content-safety.ts's
+  // file header (currently a stub; no real hash-matching provider is wired
+  // in yet).
+  try {
+    await checkContentSafety({
+      admin,
+      userId: user.id,
+      contentType: "image",
+      contentHash: hashBase64(imageBase64),
+      sourceRoute: "deep-image",
+    });
+  } catch (err) {
+    if (err instanceof ContentFlaggedError) {
+      return NextResponse.json({ error: "This content can't be processed." }, { status: 422 });
+    }
+    throw err;
+  }
+
   const language = await getUserLanguage(admin, user.id);
 
   const { data: remaining, error: rpcError } = await admin.rpc("decrement_deep_investigation", {
