@@ -57,12 +57,6 @@ export default function Home() {
     }
   }, [signedIn]);
 
-  async function logout() {
-    await supabase.auth.signOut();
-    setSignedIn(false);
-    router.refresh();
-  }
-
   function continueWhatsApp() {
     if (!pendingWa) return;
     if (pendingWa.input_type === "image") {
@@ -79,7 +73,6 @@ export default function Home() {
       <main className="shell">
         <nav>
           <div className="brand">Vuryfy</div>
-          <div className="credits">{t("nav.credits")} · —</div>
         </nav>
         <section className="hero">
           <p className="eyebrow">{t("landing.eyebrow")}</p>
@@ -93,7 +86,12 @@ export default function Home() {
               {t("landing.signIn")}
             </Link>
           </div>
-          <p className="hint">{t("landing.hint")}</p>
+          {/* Sept 19, 2026: the old landing.hint copy ("no separate sign-up
+              needed") is stale now that Sign up/Sign in are genuinely
+              separate flows (see the signup flow redesign) — removed rather
+              than reworded, since nothing here needs replacing it. The
+              translation key itself is left in lib/translations.ts,
+              unused, same convention as other now-dead i18n keys. */}
         </section>
       </main>
     );
@@ -155,14 +153,12 @@ export default function Home() {
           </div>
         </div>
         <div className="home-links">
-          <button className="text-button" onClick={() => router.push("/saved")}>
-            {t("home.history")}
-          </button>
+          {/* Sept 19, 2026: History link removed (app/saved/page.tsx is left
+              in place, just unreferenced) and Sign out moved into the
+              Settings page (app/settings/page.tsx) — this footer is now
+              just the one link. */}
           <button className="text-button" onClick={() => router.push("/settings")}>
             {t("home.settings")}
-          </button>
-          <button className="text-button" onClick={logout}>
-            {t("home.signOut")}
           </button>
         </div>
         {subscription?.cancel_at_period_end && (

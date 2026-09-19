@@ -35,6 +35,17 @@ export default function SettingsPage() {
     setSaved(true);
   }
 
+  // Sept 19, 2026: Sign out moved here from the home screen's footer (which
+  // also dropped its History link — see app/page.tsx) so the home footer is
+  // just "Settings", and account-level actions like this one live inside
+  // Settings instead. Reuses the same t("home.signOut") translation key the
+  // home page already had, rather than adding a new one.
+  async function logout() {
+    await supabase.auth.signOut();
+    router.push("/");
+    router.refresh();
+  }
+
   return (
     <main className="shell narrow">
       <nav>
@@ -76,6 +87,12 @@ export default function SettingsPage() {
         <p className="hint" style={{ marginTop: 28 }}>
           {t("settings.moreComingSoon")}
         </p>
+
+        <div className="home-links" style={{ marginTop: 28 }}>
+          <button className="text-button" onClick={logout}>
+            {t("home.signOut")}
+          </button>
+        </div>
       </section>
     </main>
   );
