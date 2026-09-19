@@ -39,3 +39,21 @@
    spacing between each other at all — this is what fixes that, for any
    .panel with more than two stacked children. */
 .panel > * + *{margin-top:14px}
+
+/* Sept 19, 2026 — puts the shield+checkmark mark (app/icon.svg) next to the
+   "Vuryfy" wordmark everywhere .brand is used (home, login, onboarding/
+   payment, saved, share/[id], the old dead billing page), via one CSS rule
+   instead of editing each page's markup. Data URI is the same artwork as
+   app/icon.svg, inlined so no extra network request is needed. */
+.brand{display:inline-flex;align-items:center;gap:8px}
+.brand::before{
+  content:"";
+  display:inline-block;
+  width:1em;
+  height:1em;
+  background-image:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjggMTI4Ij4KICA8cmVjdCB3aWR0aD0iMTI4IiBoZWlnaHQ9IjEyOCIgcng9IjI4IiBmaWxsPSIjMTcxOTFjIi8+CiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMjcuNDMsMjcuNDMpIHNjYWxlKDMuMDQ3NSkiPgogICAgPHBhdGggZD0iTTEyIDJMNCA1djYuNUM0IDE2LjUgNy40IDIwLjcgMTIgMjJjNC42LTEuMyA4LTUuNSA4LTEwLjVWNWwtOC0zeiIgZmlsbD0id2hpdGUiLz4KICAgIDxwYXRoIGQ9Ik04LjUgMTIuMmwyLjQgMi40IDQuNi01LjIiIHN0cm9rZT0iIzE3MTkxYyIgc3Ryb2tlLXdpZHRoPSIxLjgiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZmlsbD0ibm9uZSIvPgogIDwvZz4KPC9zdmc+Cg==");
+  background-size:contain;
+  background-repeat:no-repeat;
+  border-radius:22%;
+  flex-shrink:0;
+}
