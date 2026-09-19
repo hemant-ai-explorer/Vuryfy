@@ -4,6 +4,18 @@ import crypto from "crypto";
 // supabase/migrations/0016_whatsapp_link_codes.sql and 0017_whatsapp_
 // submissions.sql for the full design.
 
+// Paused Sept 19, 2026 — user's explicit call: "stop the whatsapp feature
+// for now. we will make it on when instagram and facebook connections are
+// also done" (see architecture-decisions-addendum-2026-09-19.md's
+// "Instagram + Facebook social connections" spec — the plan is to launch
+// WhatsApp, Instagram, and Facebook connections together as a premium-tier
+// feature once all three exist). This single flag gates every WhatsApp
+// entry point (the link-code API, the webhook, and both UI panels) —
+// flip it back to true once Instagram/Facebook are ready to ship
+// alongside it. No code was removed and no data was touched; this only
+// stops new links/submissions from being created while it's off.
+export const WHATSAPP_FEATURE_ENABLED = false;
+
 // Generates the one-time code shown in-app and sent as the user's first
 // WhatsApp message. Avoids visually ambiguous characters (0/O, 1/I/L)
 // since it's read and typed by a person, even though wa.me's pre-filled

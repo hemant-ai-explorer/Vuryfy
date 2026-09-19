@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useLanguage } from "@/app/providers/language-provider";
 import { parseJsonResponse } from "@/lib/safe-json";
+import { WHATSAPP_FEATURE_ENABLED } from "@/lib/whatsapp";
 
 // Unified text-entry confirm screen — Sept 16, 2026. Replaces the home
 // screen's old mode-first pair ("Start a Quick Check" / "Start a Deep
@@ -164,33 +165,37 @@ function ClaimForm() {
           </button>
         </div>
         {error && <p className="error">{error}</p>}
-        {/* WhatsApp media-first flow — English-only for now, same flagged,
-            known i18n gap as the rest of this feature. */}
-        <div className="panel" style={{ marginTop: 28 }}>
-          <h2 style={{ fontSize: 16 }}>Prefer WhatsApp?</h2>
-          {waCode ? (
-            <>
-              <p className="sub" style={{ fontSize: 14, margin: "0 0 14px" }}>
-                Tap below and send the pre-filled code. Once connected, forward text, a link, or a photo — each one
-                will show up here in the app for you to check, for the next 24 hours.
-              </p>
-              <a
-                className="primary-link"
-                href={waCode.waLink}
-                target="_blank"
-                rel="noreferrer"
-                style={{ display: "block", textAlign: "center" }}
-              >
-                Open WhatsApp
-              </a>
-            </>
-          ) : (
-            <button className="secondary" onClick={getWhatsAppLink} disabled={waLoading}>
-              {waLoading ? "Generating…" : "Get a WhatsApp link"}
-            </button>
-          )}
-          {waError && <p className="error">{waError}</p>}
-        </div>
+        {/* WhatsApp media-first flow — paused Sept 19, 2026, see
+            lib/whatsapp.ts's WHATSAPP_FEATURE_ENABLED comment. Panel hidden
+            entirely rather than shown disabled, until it relaunches
+            alongside Instagram/Facebook. */}
+        {WHATSAPP_FEATURE_ENABLED && (
+          <div className="panel" style={{ marginTop: 28 }}>
+            <h2 style={{ fontSize: 16 }}>Prefer WhatsApp?</h2>
+            {waCode ? (
+              <>
+                <p className="sub" style={{ fontSize: 14, margin: "0 0 14px" }}>
+                  Tap below and send the pre-filled code. Once connected, forward text, a link, or a photo — each one
+                  will show up here in the app for you to check, for the next 24 hours.
+                </p>
+                <a
+                  className="primary-link"
+                  href={waCode.waLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ display: "block", textAlign: "center" }}
+                >
+                  Open WhatsApp
+                </a>
+              </>
+            ) : (
+              <button className="secondary" onClick={getWhatsAppLink} disabled={waLoading}>
+                {waLoading ? "Generating…" : "Get a WhatsApp link"}
+              </button>
+            )}
+            {waError && <p className="error">{waError}</p>}
+          </div>
+        )}
         <p className="hint">
           {t("claim.hintQrText")} <Link href="/verify/qr">{t("claim.hintQrLink")}</Link>
         </p>

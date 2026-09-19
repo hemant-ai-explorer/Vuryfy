@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { generateLinkCode } from "@/lib/whatsapp";
+import { generateLinkCode, WHATSAPP_FEATURE_ENABLED } from "@/lib/whatsapp";
 
 // Generates a one-time code + wa.me deep link that starts a WhatsApp link
 // session (Part 13 rework) — see supabase/migrations/0017_whatsapp_
@@ -21,6 +21,11 @@ const CODE_TTL_MINUTES = 15;
 const MAX_GENERATE_ATTEMPTS = 5;
 
 export async function POST(request: Request) {
+  // Feature paused — see lib/whatsapp.ts's WHATSAPP_FEATURE_ENABLED comment.
+  if (!WHATSAPP_FEATURE_ENABLED) {
+    return NextResponse.json({ error: "WhatsApp submission isn't available right now." }, { status: 404 });
+  }
+
   const supabase = await createServerSupabase();
   const {
     data: { user },
