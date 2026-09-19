@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { normalizeWhatsAppPhone, verifyTwilioSignature, downloadTwilioMedia } from "@/lib/whatsapp";
+import {
+  normalizeWhatsAppPhone,
+  verifyTwilioSignature,
+  downloadTwilioMedia,
+  WHATSAPP_FEATURE_ENABLED,
+} from "@/lib/whatsapp";
 
 // Twilio's inbound-message webhook — WhatsApp media-first flow (Part 13
 // rework, Sept 18, 2026). Twilio calls this directly with no Vuryfy
@@ -51,6 +56,14 @@ function escapeXml(s: string): string {
 }
 
 export async function POST(request: Request) {
+  // Feature paused — see lib/whatsapp.ts's WHATSAPP_FEATURE_ENABLED comment.
+  // Acknowledge quietly with an empty TwiML response (Twilio expects a 200
+  // to avoid retrying) rather than processing or storing anything while
+  // this is off.
+  if (!WHATSAPP_FEATURE_ENABLED) {
+    return twiml();
+  }
+
   const rawBody = await request.text();
   const params = new URLSearchParams(rawBody);
   const paramsObj: Record<string, string> = {};

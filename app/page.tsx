@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useLanguage } from "@/app/providers/language-provider";
+import { WHATSAPP_FEATURE_ENABLED } from "@/lib/whatsapp";
 
 type Credits = { quick_checks: number; deep_investigations: number; total: number };
 type Subscription = {
@@ -46,10 +47,14 @@ export default function Home() {
         setSubscription(d.subscription);
       })
       .catch(() => {});
-    fetch("/api/whatsapp/pending")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setPendingWa(d?.pending ?? null))
-      .catch(() => {});
+    // Feature paused — see lib/whatsapp.ts's WHATSAPP_FEATURE_ENABLED
+    // comment. Skip the check entirely rather than fetch-then-hide.
+    if (WHATSAPP_FEATURE_ENABLED) {
+      fetch("/api/whatsapp/pending")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => setPendingWa(d?.pending ?? null))
+        .catch(() => {});
+    }
   }, [signedIn]);
 
   async function logout() {
@@ -103,7 +108,7 @@ export default function Home() {
         <p className="eyebrow">{t("home.eyebrow")}</p>
         <h1>{t("home.heading")}</h1>
         <p className="sub">{t("home.sub")}</p>
-        {pendingWa && (
+        {WHATSAPP_FEATURE_ENABLED && pendingWa && (
           <div className="panel" style={{ marginBottom: 20 }}>
             <p style={{ margin: "0 0 8px", fontWeight: 600 }}>
               {pendingWa.input_type === "image"
