@@ -17,6 +17,15 @@ import { isSupportedLanguage } from "@/lib/translations";
 // deliberately different from defaulting to "en" here, which would make a
 // genuinely new user indistinguishable from someone who already chose
 // English.
+//
+// POST optionally also accepts full_name (Sept 19, 2026, added for the new
+// combined Name + Language + Phone signup screen — see app/login/page.tsx).
+// It's folded into this same endpoint rather than given its own route
+// since the signup screen saves both in one call right after OTP verifies;
+// full_name is written to public.profiles (identity), separately from the
+// user_preferences upsert below (settings) — omit it entirely (as every
+// other caller, e.g. the settings-page language override, already does)
+// and only the language is touched.
 export async function GET() {
   const supabase = await createServerSupabase();
   const {
@@ -57,6 +66,8 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => null);
   const language = body?.language;
+  const rawFullName = typeof body?.full_name === "string" ? body.full_name.trim() : null;
+  const fullName = rawFullName && rawFullName.length > 0 ? rawFullName.slice(0, 200) : null;
 
   if (!isSupportedLanguage(language)) {
     return NextResponse.json({ error: "Unsupported language." }, { status: 400 });
@@ -72,5 +83,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Could not save your language preference." }, { status: 500 });
   }
 
-  return NextResponse.json({ language });
+  if (fullName) {
+    const { error: nameError } = await admin.from("profiles").update({ full_name: fullName }).eq("id", user.id);
+    // Non-fatal — the language preference (the part every other caller of
+    // this route relies on) is already saved above. A name-save failure
+    // shouldn't block the signup flow from continuing.
+    if (nameError) console.error("[preferences] full_name save failed:", nameError);
+  }
+
+  return NextResponse.json({ language, full_name: fullName });
 }
