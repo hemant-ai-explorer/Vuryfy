@@ -7,6 +7,7 @@ import {
   uploadDownloadedVideoToGemini,
   cleanupVideoFile,
   VideoStorageError,
+  ContentFlaggedError,
 } from "@/lib/video-file-pipeline";
 
 // Route-level execution budget — Sept 15, 2026: raised from 60s to 300s
@@ -89,7 +90,10 @@ export async function POST(request: Request) {
   let geminiFileName: string | undefined;
 
   try {
-    const { bytes } = await downloadVideoFromStorage(admin, storagePath);
+    const { bytes } = await downloadVideoFromStorage(admin, storagePath, {
+      userId: user.id,
+      sourceRoute: "transcribe-video",
+    });
     const geminiFile = await uploadDownloadedVideoToGemini(bytes, mimeType);
     geminiFileName = geminiFile.name;
     const transcript = await transcribeVideoSpeech(geminiFile.fileUri, mimeType);
@@ -97,6 +101,10 @@ export async function POST(request: Request) {
   } catch (err) {
     console.error("[transcribe-video] transcription failed:", err);
     const isStorageError = err instanceof VideoStorageError;
+    // Content safety (Part 15, Sept 19, 2026) — see lib/content-safety.ts.
+    if (err instanceof ContentFlaggedError) {
+      return NextResponse.json({ error: "This content can't be processed." }, { status: 422 });
+    }
     return NextResponse.json(
       {
         error: isStorageError ? err.message : "Try Again",

@@ -6,6 +6,7 @@ import { normalizeClaim } from "@/lib/quick-check";
 import { runAudioDeepInvestigation, AUDIO_DEEP_ENGINE_VERSION, type AudioAnalysisResult } from "@/lib/audio-analysis";
 import { getUserLanguage } from "@/lib/user-language";
 import { translate } from "@/lib/translations";
+import { checkContentSafety, ContentFlaggedError, hashBase64 } from "@/lib/content-safety";
 import {
   computeCacheKey,
   getCachedVerification,
@@ -90,6 +91,26 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+
+  // Content safety (Part 15, Sept 19, 2026) — scan before any credit is
+  // charged or the audio reaches an AI provider. See lib/content-safety.ts's
+  // file header (currently a stub; no real hash-matching provider is wired
+  // in yet).
+  try {
+    await checkContentSafety({
+      admin,
+      userId: user.id,
+      contentType: "audio",
+      contentHash: hashBase64(audioBase64),
+      sourceRoute: "deep-audio-combined",
+    });
+  } catch (err) {
+    if (err instanceof ContentFlaggedError) {
+      return NextResponse.json({ error: "This content can't be processed." }, { status: 422 });
+    }
+    throw err;
+  }
+
   const language = await getUserLanguage(admin, user.id);
   const textCacheNamespace = language === "en" ? "audio_transcript" : `audio_transcript:${language}`;
   const audioCacheNamespace = language === "en" ? "audio" : `audio:${language}`;

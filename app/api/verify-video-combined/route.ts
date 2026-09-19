@@ -11,6 +11,7 @@ import {
   uploadDownloadedVideoToGemini,
   cleanupVideoFile,
   VideoStorageError,
+  ContentFlaggedError,
 } from "@/lib/video-file-pipeline";
 import {
   computeCacheKey,
@@ -150,7 +151,10 @@ export async function POST(request: Request) {
   let textSemanticEmbedding: number[] | null = null;
 
   try {
-    const { bytes, contentHash } = await downloadVideoFromStorage(admin, storagePath);
+    const { bytes, contentHash } = await downloadVideoFromStorage(admin, storagePath, {
+      userId: user.id,
+      sourceRoute: "verify-video-combined",
+    });
     videoCacheKey = computeCacheKey(`sha256:${contentHash}|ctx:${context}`, videoCacheNamespace, VIDEO_QUICK_ENGINE_VERSION);
 
     const [textCached, videoCached] = await Promise.all([
@@ -206,7 +210,12 @@ export async function POST(request: Request) {
     // Gemini file is cleaned up here now; the Storage object survives so a
     // real retry can reuse it.
     const isStorageError = err instanceof VideoStorageError;
+    // Content safety (Part 15, Sept 19, 2026) — see lib/content-safety.ts.
+    const contentFlagged = err instanceof ContentFlaggedError;
     await cleanupVideoFile(admin, storagePath, geminiFileName, false);
+    if (contentFlagged) {
+      return NextResponse.json({ error: "This content can't be processed." }, { status: 422 });
+    }
     return NextResponse.json(
       {
         error: isStorageError ? err.message : "Try Again",

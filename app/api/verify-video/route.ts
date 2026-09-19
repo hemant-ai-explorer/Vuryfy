@@ -10,6 +10,7 @@ import {
   uploadDownloadedVideoToGemini,
   cleanupVideoFile,
   VideoStorageError,
+  ContentFlaggedError,
 } from "@/lib/video-file-pipeline";
 import {
   computeCacheKey,
@@ -124,7 +125,10 @@ export async function POST(request: Request) {
   let cacheHit: boolean;
 
   try {
-    const { bytes, contentHash } = await downloadVideoFromStorage(admin, storagePath);
+    const { bytes, contentHash } = await downloadVideoFromStorage(admin, storagePath, {
+      userId: user.id,
+      sourceRoute: "verify-video",
+    });
     cacheKey = computeCacheKey(`sha256:${contentHash}|ctx:${context}`, videoCacheNamespace, VIDEO_QUICK_ENGINE_VERSION);
 
     const cached = await getCachedVerification(admin, cacheKey);
@@ -165,7 +169,12 @@ export async function POST(request: Request) {
     // failed upload isn't orphaned forever, just not destroyed on the first
     // hiccup.
     const isStorageError = err instanceof VideoStorageError;
+    // Content safety (Part 15, Sept 19, 2026) — see lib/content-safety.ts.
+    const contentFlagged = err instanceof ContentFlaggedError;
     await cleanupVideoFile(admin, storagePath, geminiFileName, false);
+    if (contentFlagged) {
+      return NextResponse.json({ error: "This content can't be processed." }, { status: 422 });
+    }
     return NextResponse.json(
       {
         error: isStorageError ? err.message : "Try Again",

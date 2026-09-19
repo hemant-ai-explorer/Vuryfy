@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
 import { uploadVideoToGemini, deleteGeminiFile, type GeminiFileRef } from "@/lib/gemini-file-upload";
+import { checkContentSafety, ContentFlaggedError } from "@/lib/content-safety";
 
 // Shared download-from-Supabase-Storage / upload-to-Gemini-File-API steps
 // used identically by all 5 video routes (transcribe-video, verify-video,
@@ -17,6 +18,19 @@ import { uploadVideoToGemini, deleteGeminiFile, type GeminiFileRef } from "@/lib
 // download is unavoidable either way (the content hash can only come from
 // the actual bytes), but a cache hit still skips the far more expensive
 // Gemini half entirely, same as the old inline-base64 cache design did.
+//
+// Content safety (Part 15, Sept 19, 2026): this is also the single choke
+// point for the illegal-content-handling pipeline's video path — see
+// lib/content-safety.ts's file header for the full design (it's currently
+// a stub; no real hash-matching provider is connected yet). Checked here,
+// right after computing the real content hash and BEFORE the Gemini File
+// API upload below, so flagged video never reaches an AI provider and
+// every one of the 5 video routes gets this for free rather than needing
+// its own copy. Throws ContentFlaggedError (re-exported below) on a
+// match — callers should catch it specifically and skip their normal
+// "Try Again"/infra-error handling; see any video route's catch block for
+// the pattern already wired in.
+export { ContentFlaggedError };
 
 export class VideoStorageError extends Error {
   constructor(message: string) {
@@ -32,7 +46,8 @@ export interface DownloadedVideo {
 
 export async function downloadVideoFromStorage(
   admin: SupabaseClient,
-  storagePath: string
+  storagePath: string,
+  safety: { userId: string; sourceRoute: string }
 ): Promise<DownloadedVideo> {
   const { data: blob, error } = await admin.storage.from("temp-video-uploads").download(storagePath);
   if (error || !blob) {
@@ -50,6 +65,20 @@ export async function downloadVideoFromStorage(
   }
   const bytes = await blob.arrayBuffer();
   const contentHash = createHash("sha256").update(Buffer.from(bytes)).digest("hex");
+
+  // Storage path is recorded on the flag row (not deleted here on a flag —
+  // see checkContentSafety's caller and cleanupVideoFile below) so the
+  // object survives for the operator to review/report manually rather
+  // than being destroyed the moment it's flagged.
+  await checkContentSafety({
+    admin,
+    userId: safety.userId,
+    contentType: "video",
+    contentHash,
+    sourceRoute: safety.sourceRoute,
+    storagePath,
+  });
+
   return { bytes, contentHash };
 }
 
@@ -65,7 +94,11 @@ export async function uploadDownloadedVideoToGemini(bytes: ArrayBuffer, mimeType
 // false for the free transcribe step (see app/api/transcribe-video/
 // route.ts's header: the object is kept for the follow-up paid check call
 // to reuse) and true for every other video route (nothing further will
-// need these bytes afterward).
+// need these bytes afterward). Also false whenever downloadVideoFromStorage
+// threw ContentFlaggedError, same reasoning as the free-preview case:
+// see each route's catch block, which passes deleteStorage=false on that
+// path deliberately, so a flagged object is preserved rather than
+// destroyed.
 export async function cleanupVideoFile(
   admin: SupabaseClient,
   storagePath: string,
