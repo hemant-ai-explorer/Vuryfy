@@ -115,7 +115,11 @@ function LoginForm() {
       } catch (err) {
         console.error("[login] saving signup name/language failed:", err);
       }
-      await refresh();
+      // justAuthenticated=true — see language-provider.tsx's refresh() header
+      // comment: right after verifyOtp() resolves, the session cookie isn't
+      // always readable yet by this immediate /api/preferences call, so a
+      // 401 here should retry rather than fail open to "no preference".
+      await refresh(true);
       setLoading(false);
       router.push("/onboarding/payment");
       router.refresh();
@@ -124,7 +128,8 @@ function LoginForm() {
 
     // Sign-in (or no intent) — now check whether a language preference
     // already exists before deciding where to send the user next.
-    await refresh();
+    // justAuthenticated=true for the same reason as the signup branch above.
+    await refresh(true);
     setOtpVerified(true);
     setLoading(false);
   }
@@ -163,10 +168,15 @@ function LoginForm() {
           <h1>{t("language.heading")}</h1>
           <p className="sub">{t("language.sub")}</p>
           <div className="panel">
+            {/* Sept 20, 2026: aria-label added — a bare <select> with no
+                label association can have an accessible name that doesn't
+                reliably update with the selected option across browsers/AT
+                (confirmed during a full feature test pass). */}
             <select
               value={selectedLanguage}
               onChange={(e) => setSelectedLanguage(e.target.value as Language)}
               disabled={savingLanguage || hasPreference === null}
+              aria-label={t("settings.languageLabel")}
             >
               {SUPPORTED_LANGUAGES.map((lang) => (
                 <option key={lang.code} value={lang.code}>
@@ -206,7 +216,11 @@ function LoginForm() {
                       panels) for new pieces added outside the original
                       9-language rollout. */}
                   <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
-                  <select value={selectedLanguage} onChange={(e) => setSelectedLanguage(e.target.value as Language)}>
+                  <select
+                    value={selectedLanguage}
+                    onChange={(e) => setSelectedLanguage(e.target.value as Language)}
+                    aria-label={t("settings.languageLabel")}
+                  >
                     {SUPPORTED_LANGUAGES.map((lang) => (
                       <option key={lang.code} value={lang.code}>
                         {lang.nativeLabel}

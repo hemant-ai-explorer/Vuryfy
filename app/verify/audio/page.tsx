@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { prepareAudioForUpload, type PreparedAudio } from "@/lib/prepare-audio-upload";
 import { useLanguage } from "@/app/providers/language-provider";
 import { parseJsonResponse } from "@/lib/safe-json";
+import { useElapsedSeconds } from "@/lib/use-elapsed-seconds";
 
 // Audio input — first half of the last step in the locked media-type build
 // order (text + link -> QR -> image -> audio/video), audio shipping ahead
@@ -158,6 +159,9 @@ export default function VerifyAudioPage() {
 
   const hasAudio = !!prepared;
   const anySubmitting = !!submitting;
+  // Sept 20, 2026: "still working" progress indicator for Deep Investigation
+  // — see lib/use-elapsed-seconds.ts.
+  const deepElapsed = useElapsedSeconds(submitting === "combined-deep" || submitting === "audio-deep");
 
   return (
     <main className="shell narrow">
@@ -216,7 +220,9 @@ export default function VerifyAudioPage() {
                 {t("action.chooseAnother")}
               </button>
               <button className="secondary" onClick={() => submitCombined("deep")} disabled={anySubmitting}>
-                {submitting === "combined-deep" ? t("claim.investigating") : t("claim.deepInvestigation")}
+                {submitting === "combined-deep"
+                  ? `${t("claim.investigating")} (${deepElapsed}s)`
+                  : t("claim.deepInvestigation")}
               </button>
               <button onClick={() => submitCombined("quick")} disabled={anySubmitting}>
                 {submitting === "combined-quick" ? t("claim.checking") : t("claim.quickCheck")}
@@ -243,7 +249,9 @@ export default function VerifyAudioPage() {
                 {t("action.chooseAnother")}
               </button>
               <button className="secondary" onClick={() => submitAudio("deep")} disabled={anySubmitting}>
-                {submitting === "audio-deep" ? t("claim.investigating") : t("claim.deepInvestigation")}
+                {submitting === "audio-deep"
+                  ? `${t("claim.investigating")} (${deepElapsed}s)`
+                  : t("claim.deepInvestigation")}
               </button>
               <button onClick={() => submitAudio("quick")} disabled={anySubmitting}>
                 {submitting === "audio-quick" ? t("claim.checking") : t("claim.quickCheck")}

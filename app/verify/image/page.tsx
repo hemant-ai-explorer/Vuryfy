@@ -7,6 +7,7 @@ import { extractTextFromImage } from "@/lib/decode-image-text";
 import { prepareImageForUpload, type PreparedImage } from "@/lib/prepare-image-upload";
 import { useLanguage } from "@/app/providers/language-provider";
 import { parseJsonResponse } from "@/lib/safe-json";
+import { useElapsedSeconds } from "@/lib/use-elapsed-seconds";
 
 // Image input — the next step in the locked media-type build order (text +
 // link -> QR -> image -> audio/video). Offers up to two independent
@@ -184,6 +185,9 @@ function ImageForm() {
   const anySubmitting = !!submitting;
   const isCheckingCombined = submitting === "combined-quick" || submitting === "vision-quick";
   const isDeepCombined = submitting === "combined-deep" || submitting === "vision-deep";
+  // Sept 20, 2026: "still working" progress indicator for Deep Investigation
+  // — see lib/use-elapsed-seconds.ts.
+  const deepElapsed = useElapsedSeconds(isDeepCombined);
 
   return (
     <main className="shell narrow">
@@ -257,7 +261,7 @@ function ImageForm() {
                 onClick={() => (ocrText ? submitCombined("deep") : submitVision("deep"))}
                 disabled={anySubmitting}
               >
-                {isDeepCombined ? t("claim.investigating") : t("claim.deepInvestigation")}
+                {isDeepCombined ? `${t("claim.investigating")} (${deepElapsed}s)` : t("claim.deepInvestigation")}
               </button>
               <button
                 onClick={() => (ocrText ? submitCombined("quick") : submitVision("quick"))}

@@ -7,6 +7,7 @@ import { decodeQrFromFile } from "@/lib/decode-qr";
 import { detectPaymentLink, type PaymentLinkInfo } from "@/lib/detect-payment-link";
 import { useLanguage } from "@/app/providers/language-provider";
 import { parseJsonResponse } from "@/lib/safe-json";
+import { useElapsedSeconds } from "@/lib/use-elapsed-seconds";
 
 // QR Quick Check — the next step in the locked media-type build order
 // (text + link, then QR, then image, then audio/video). The QR image is
@@ -76,6 +77,10 @@ export default function VerifyQrPage() {
   const [submitError, setSubmitError] = useState("");
   const [payeeChecking, setPayeeChecking] = useState<"quick" | "deep" | null>(null);
   const [payeeCheckError, setPayeeCheckError] = useState("");
+  // Sept 20, 2026: "still working" progress indicators for both Deep
+  // Investigation buttons on this screen — see lib/use-elapsed-seconds.ts.
+  const deepElapsed = useElapsedSeconds(submitting === "deep");
+  const payeeDeepElapsed = useElapsedSeconds(payeeChecking === "deep");
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -261,7 +266,9 @@ export default function VerifyQrPage() {
                     onClick={() => investigatePayee("deep")}
                     disabled={!!payeeChecking}
                   >
-                    {payeeChecking === "deep" ? t("claim.investigating") : t("claim.deepInvestigation")}
+                    {payeeChecking === "deep"
+                      ? `${t("claim.investigating")} (${payeeDeepElapsed}s)`
+                      : t("claim.deepInvestigation")}
                   </button>
                   <button onClick={() => investigatePayee("quick")} disabled={!!payeeChecking}>
                     {payeeChecking === "quick" ? t("claim.checking") : t("claim.quickCheck")}
@@ -294,7 +301,7 @@ export default function VerifyQrPage() {
                 {t("qr.scanAnother")}
               </button>
               <button className="secondary" onClick={() => confirm("deep")} disabled={!!submitting}>
-                {submitting === "deep" ? t("claim.investigating") : t("claim.deepInvestigation")}
+                {submitting === "deep" ? `${t("claim.investigating")} (${deepElapsed}s)` : t("claim.deepInvestigation")}
               </button>
               <button onClick={() => confirm("quick")} disabled={!!submitting}>
                 {submitting === "quick" ? t("claim.checking") : t("claim.quickCheck")}

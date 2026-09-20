@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useLanguage } from "@/app/providers/language-provider";
 import { parseJsonResponse } from "@/lib/safe-json";
 import { WHATSAPP_FEATURE_ENABLED } from "@/lib/whatsapp";
+import { useElapsedSeconds } from "@/lib/use-elapsed-seconds";
 
 // Unified text-entry confirm screen — Sept 16, 2026. Replaces the home
 // screen's old mode-first pair ("Start a Quick Check" / "Start a Deep
@@ -64,6 +65,10 @@ function ClaimForm() {
   const [claim, setClaim] = useState("");
   const [submitting, setSubmitting] = useState<"quick" | "deep" | null>(null);
   const [error, setError] = useState("");
+  // Sept 20, 2026: lightweight "still working" progress indicator for Deep
+  // Investigation — see lib/use-elapsed-seconds.ts's header. A real video DI
+  // took ~50s with nothing but a static "Investigating…" label to look at.
+  const deepElapsed = useElapsedSeconds(submitting === "deep");
   // WhatsApp media-first flow (Part 13 rework, Sept 18, 2026) — see
   // supabase/migrations/0017_whatsapp_submissions.sql. A linked phone can
   // forward text/a link OR a photo (app/verify/image/page.tsx handles the
@@ -152,13 +157,21 @@ function ClaimForm() {
         <div className="actions">
           <span>{claim.length}/10,000</span>
         </div>
+        {/* Sept 20, 2026: a disabled button never fires onClick, so there's
+            no reactive event to hang a "why didn't this work" message off
+            of — this proactive hint shows the same disabled condition
+            (non-empty but under 5 chars) before the user even presses
+            anything, rather than silently doing nothing on click. */}
+        {claim.trim().length > 0 && claim.trim().length < 5 && !submitting && (
+          <p className="hint">{t("claim.minLengthHint")}</p>
+        )}
         <div className="result-actions">
           <button
             className="secondary"
             onClick={() => submit("deep")}
             disabled={!!submitting || claim.trim().length < 5}
           >
-            {submitting === "deep" ? t("claim.investigating") : t("claim.deepInvestigation")}
+            {submitting === "deep" ? `${t("claim.investigating")} (${deepElapsed}s)` : t("claim.deepInvestigation")}
           </button>
           <button onClick={() => submit("quick")} disabled={!!submitting || claim.trim().length < 5}>
             {submitting === "quick" ? t("claim.checking") : t("claim.quickCheck")}

@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { uploadVideoToStorage, deleteUploadedVideo, type UploadedVideo } from "@/lib/prepare-video-upload";
 import { useLanguage } from "@/app/providers/language-provider";
 import { parseJsonResponse } from "@/lib/safe-json";
+import { useElapsedSeconds } from "@/lib/use-elapsed-seconds";
 
 // Video input — the last step in the locked media-type build order (text +
 // link -> QR -> image -> audio -> video), shipping after audio per the
@@ -166,6 +167,10 @@ export default function VerifyVideoPage() {
 
   const hasVideo = !!uploaded;
   const anySubmitting = !!submitting;
+  // Sept 20, 2026: "still working" progress indicator for Deep Investigation
+  // — a real video DI took ~50s with nothing but a static "Investigating…"
+  // label to look at (see lib/use-elapsed-seconds.ts).
+  const deepElapsed = useElapsedSeconds(submitting === "combined-deep" || submitting === "video-deep");
 
   return (
     <main className="shell narrow">
@@ -225,7 +230,9 @@ export default function VerifyVideoPage() {
                 {t("action.chooseAnother")}
               </button>
               <button className="secondary" onClick={() => submitCombined("deep")} disabled={anySubmitting}>
-                {submitting === "combined-deep" ? t("claim.investigating") : t("claim.deepInvestigation")}
+                {submitting === "combined-deep"
+                  ? `${t("claim.investigating")} (${deepElapsed}s)`
+                  : t("claim.deepInvestigation")}
               </button>
               <button onClick={() => submitCombined("quick")} disabled={anySubmitting}>
                 {submitting === "combined-quick" ? t("claim.checking") : t("claim.quickCheck")}
@@ -252,7 +259,9 @@ export default function VerifyVideoPage() {
                 {t("action.chooseAnother")}
               </button>
               <button className="secondary" onClick={() => submitVideo("deep")} disabled={anySubmitting}>
-                {submitting === "video-deep" ? t("claim.investigating") : t("claim.deepInvestigation")}
+                {submitting === "video-deep"
+                  ? `${t("claim.investigating")} (${deepElapsed}s)`
+                  : t("claim.deepInvestigation")}
               </button>
               <button onClick={() => submitVideo("quick")} disabled={anySubmitting}>
                 {submitting === "video-quick" ? t("claim.checking") : t("claim.quickCheck")}
