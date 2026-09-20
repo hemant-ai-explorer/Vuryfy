@@ -67,12 +67,16 @@ export default function SettingsPage() {
               dropdown, matching the same change on the sign-up language
               picker (app/login/page.tsx) — with 9 languages now supported, a
               button grid was getting unwieldy. Still auto-saves immediately
-              on selection, same as the old onClick-per-button behavior. */}
+              on selection, same as the old onClick-per-button behavior.
+              Sept 20, 2026: aria-label added — a bare <select> with no label
+              association can have an accessible name that doesn't reliably
+              update with the selected option across browsers/AT. */}
           <select
             value={language}
             onChange={(e) => pick(e.target.value as Language)}
             disabled={saving}
             style={{ maxWidth: 320 }}
+            aria-label={t("settings.languageLabel")}
           >
             {SUPPORTED_LANGUAGES.map((lang) => (
               <option key={lang.code} value={lang.code}>

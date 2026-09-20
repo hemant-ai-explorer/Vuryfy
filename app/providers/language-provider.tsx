@@ -21,7 +21,7 @@ interface LanguageContextValue {
   loading: boolean;
   t: (key: string) => string;
   setLanguage: (language: Language) => Promise<void>;
-  refresh: () => Promise<void>;
+  refresh: (justAuthenticated?: boolean) => Promise<void>;
 }
 
 const LanguageContext = createContext<LanguageContextValue>({
@@ -52,7 +52,17 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   // in") is a clean, well-defined answer from this route and is NOT
   // retried — only network errors and non-401 non-OK statuses (5xx, or a
   // transient proxy/dev-server error) get a couple of quick retries first.
-  const refresh = useCallback(async () => {
+  // `justAuthenticated` — Sept 20, 2026. Right after supabase.auth.verifyOtp()
+  // resolves client-side, the session cookie isn't always readable yet by a
+  // same-tick server-side fetch, so this same-page call to /api/preferences
+  // can come back 401 even though sign-in genuinely succeeded (confirmed
+  // live: a brief double-401 right after login, self-healing on the next
+  // request). That's a different situation from an ordinary 401 during
+  // normal navigation (a stale tab, a signed-out user landing here), which
+  // should NOT retry — so this is an explicit opt-in the caller sets only
+  // right after its own verifyOtp() call (see app/login/page.tsx's
+  // refresh(true) call sites), not a general change to 401 handling.
+  const refresh = useCallback(async (justAuthenticated = false) => {
     setLoading(true);
     const maxAttempts = 3;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -69,7 +79,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
           setLoading(false);
           return;
         }
-        if (res.status === 401) {
+        if (res.status === 401 && !justAuthenticated) {
           // Genuinely not signed in — no point retrying that.
           setHasPreference(false);
           setLoading(false);
