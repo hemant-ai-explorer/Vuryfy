@@ -236,7 +236,7 @@ function LoginForm() {
                 inputMode="tel"
               />
               <button
-                disabled={loading || phone.trim().length < 8 || (isSignup && name.trim().length === 0)}
+                disabled={loading || phone.trim().length < 10 || (isSignup && name.trim().length === 0)}
                 onClick={requestOtp}
               >
                 {loading ? t("login.sending") : t("login.continue")}
@@ -251,7 +251,7 @@ function LoginForm() {
                 inputMode="numeric"
                 autoFocus
               />
-              <button disabled={loading || otp.trim().length < 4} onClick={verify}>
+              <button disabled={loading || otp.trim().length < 6} onClick={verify}>
                 {loading ? t("login.verifying") : t("login.verify")}
               </button>
               <button
