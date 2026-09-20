@@ -174,7 +174,7 @@ export async function POST(request: Request) {
   try {
     const [freshText, freshAudio] = await Promise.all([
       textCached || textSemanticMatch ? Promise.resolve(null) : runDeepInvestigation(transcript, language),
-      audioCached ? Promise.resolve(null) : runAudioDeepInvestigation(audioBase64, mimeType, context || null, language),
+      audioCached ? Promise.resolve(null) : runAudioDeepInvestigation(audioBase64, mimeType, context || null, language, transcript),
     ]);
     textResult = textCached ?? textSemanticMatch ?? (freshText as DeepInvestigationResult);
     audioResult = audioCached ?? (freshAudio as AudioAnalysisResult);

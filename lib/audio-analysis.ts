@@ -124,14 +124,25 @@ import { translate, LANGUAGE_NAMES, type Language } from "@/lib/translations";
 // pipeline never sees the confirmed transcript (it listens to the raw
 // audio independently) and was never a transcription tool to begin with,
 // so asking it to be "specific and concrete" invited it to name exact
-// words it wasn't equipped to reliably identify. Fixed by restricting
-// "concrete evidence" to acoustic/paralinguistic properties only (pacing,
-// prosody, background noise, splicing, artifacts) and explicitly
-// forbidding quoting/asserting specific spoken content. No engine_version
-// bump — a prompt-wording fix, not a new capability or schema change, same
-// as the Sept 17 fix.
-export const AUDIO_QUICK_ENGINE_VERSION = "v5-gemini-audio-quick-aigen-reasoning";
-export const AUDIO_DEEP_ENGINE_VERSION = "v5-gemini-audio-deep-aigen";
+// words it wasn't equipped to reliably identify.
+//
+// First attempt (same day) only tightened the prompt wording — restricting
+// "concrete evidence" to acoustic/paralinguistic properties and forbidding
+// quoting spoken content — with no engine_version bump. Re-tested against
+// the exact same clip that originally surfaced the bug and it reproduced
+// IDENTICALLY: the model still wrote "speaking a single word ('quarantine')"
+// despite the explicit rule against it. Prompt wording alone was not
+// reliably enough. **Actual fix:** `buildUserPrompt` now accepts an
+// optional `knownTranscript`, which the "combined" routes (the only ones
+// where a transcript exists before this call runs) pass through — the
+// model is told to treat it as ground truth and never re-guess or
+// contradict it, removing the need to guess at spoken words at all rather
+// than just telling it not to. This IS a real behavior/capability change
+// (a new input the model can use), so the engine version bumps this time,
+// invalidating the audio-result cache entries that may have baked in a
+// wrong-word result under the old prompt.
+export const AUDIO_QUICK_ENGINE_VERSION = "v6-gemini-audio-quick-transcript-grounded";
+export const AUDIO_DEEP_ENGINE_VERSION = "v6-gemini-audio-deep-transcript-grounded";
 
 // Sept 15, 2026: added same day, after a live 503 surfaced this gap on
 // text Deep Investigation's identical call (see deep-investigation.ts's
@@ -203,7 +214,9 @@ THEN, and separately from everything else: decide ai_generated_likelihood — wh
 - For SPEECH: modern commercial voice-cloning and text-to-speech tools are SPECIFICALLY engineered to reproduce natural prosody, breath sounds, timbre consistency, and a plausible noise floor — those qualities are now table stakes for good synthetic speech and are NOT reliable evidence a voice is real. Do not call "unlikely" just because a voice sounds natural, warm, or well-produced. Only call "unlikely" when you hear evidence of the actual RECORDING ENVIRONMENT, not just the voice: background noise that audibly varies or shifts over time, incidental unrelated sounds (traffic, papers, a door, another person), room echo/reverb consistent with a specific physical space, handling or mic-bump noise, or other capture imperfections a text-to-speech pipeline would not introduce. A clean, studio-quality voice with no such environmental evidence either way should be called "uncertain", not "unlikely" — admitting you can't tell is the honest answer, since a great voice clone and a professionally recorded human can sound identical. Reserve "likely" for actual synthesis tells: unnaturally even pacing/rhythm with no natural hesitation, a voice that subtly drifts in timbre across the clip, or robotic/metallic artifacts.
 - For MUSIC, AMBIENCE, SOUNDSCAPES, or SOUND EFFECTS (e.g. output from models like Stable Audio, MusicGen, AudioLDM): unnaturally smooth or seamless transitions between textures; sounds (animal calls, footsteps, wind gusts, etc.) that repeat with implausibly identical pitch, timing, or shape rather than the natural variation a real recording would have; a total absence of a genuine environmental noise floor, microphone self-noise, or incidental unrelated sounds a real field recording would pick up; layered sounds that are unnaturally cleanly separated rather than blending/bleeding into each other as they would in a real space; reverb or spatial characteristics that stay artificially uniform across the whole clip; a subtle "smeared" or "shimmering" quality in transients that is characteristic of diffusion-based audio generation. Here, natural imperfections (varying noise floor, natural randomness in repeated sounds, genuine room tone) ARE still reasonable evidence for "unlikely", since generative audio models struggle more with these than modern TTS struggles with vocal naturalness.
 - Call it "uncertain" whenever the clip is too short, too clean-but-ambiguous, or gives genuinely mixed signals either way — this is the correct, honest answer far more often for speech than "unlikely" is.
-- ai_generated_reasoning must be a specific, concrete sentence or two naming what you actually heard (or didn't hear) that led to your call — never a vague "it sounds synthetic" or "it sounds natural." Ground this ONLY in acoustic/paralinguistic properties: pacing and rhythm, prosody, pitch/timbre consistency or drift, breath sounds, background noise or room tone (present, absent, or changing), handling/mic-bump noise, splicing or cut points, or generation artifacts. Do NOT assert, quote, or paraphrase specific words or phrases you believe were spoken, even in passing — you are not a transcription tool, a separate pipeline already has the confirmed transcript, and confidently naming a word you misheard (a real failure mode: a past run claimed to hear "quarantine" in a recording that actually said something else entirely) directly contradicts that transcript and misleads the user. If speech content is relevant to your reasoning, describe it only in general terms (e.g. "the speaker's claims about X") rather than quoting specific words. Do NOT name a specific AI voice/TTS tool or brand (e.g., ElevenLabs, Narakeet, Play.ht) from general knowledge — you cannot identify which tool made a recording from its sound alone. The only exception: if the recording itself explicitly says which tool made it (e.g., a spoken self-announcement, or a name given in the context above), quote that name exactly as stated rather than substituting a different well-known brand.
+- ai_generated_reasoning must be a specific, concrete sentence or two naming what you actually heard (or didn't hear) that led to your call — never a vague "it sounds synthetic" or "it sounds natural." Ground this ONLY in acoustic/paralinguistic properties: pacing and rhythm, prosody, pitch/timbre consistency or drift, breath sounds, background noise or room tone (present, absent, or changing), handling/mic-bump noise, splicing or cut points, or generation artifacts.
+- HARD RULE, no exceptions: never write out, quote, or guess at a specific word or phrase you believe was spoken — not even one word, not even to note that a clip is short (e.g. NEVER write something like "speaking a single word ('quarantine')" — describe it as "an extremely brief clip, roughly one to two words" instead, with no word named). You are not a reliable transcription tool for short/noisy/synthetic clips, a separate pipeline already has the confirmed transcript, and this is a real, previously observed failure: one past run confidently named a specific word that was not actually in the recording at all, flatly contradicting the correct transcript shown elsewhere on the same result and misleading the user. If a confirmed transcript is provided to you below, treat it as ground truth for what was said — never re-guess, second-guess, or substitute a different word than what it shows, even if the audio sounds to you like it says something else; your job here is judging HOW it sounds, not WHAT it says.
+- Do NOT name a specific AI voice/TTS tool or brand (e.g., ElevenLabs, Narakeet, Play.ht) from general knowledge — you cannot identify which tool made a recording from its sound alone. The only exception: if the recording itself explicitly says which tool made it (e.g., a spoken self-announcement, or a name given in the context above), quote that name exactly as stated rather than substituting a different well-known brand.
 
 SEPARATELY, decide the overall verdict:
 - Use "Suspicious" when you found specific, describable audible evidence in signals_found (any of the signals above, or audible splicing/cut points, or background noise/room acoustics that inconsistently change mid-recording), OR whenever ai_generated_likelihood is "likely" — a recording you believe is AI-generated is never "Clean". Never choose "Suspicious" from a vague sense that something "sounds off" with nothing specific to point to.
@@ -225,11 +238,24 @@ function languageInstruction(language: Language): string {
   return `\n\nWrite the "summary" and "ai_generated_reasoning" fields, and each item in "signals_found", in natural, fluent ${LANGUAGE_NAMES[language]}.`;
 }
 
-function buildUserPrompt(context: string | null): string {
+// knownTranscript (Sept 20, 2026 fix — see the HONESTY_RULES hard-rule
+// comment above for the full incident): only passed by the "combined"
+// routes (verify-audio-combined / deep-audio-combined), which already have
+// a human-confirmed transcript from the separate text pipeline before this
+// audio-authenticity call ever runs. Giving it here as ground truth is
+// meant to remove the model's temptation to guess at spoken words at all —
+// the earlier fix (forbidding word-guessing outright) was not reliably
+// followed on its own. Never passed by the audio-only routes
+// (verify-audio / deep-audio), which only run when no speech was detected
+// in the first place.
+function buildUserPrompt(context: string | null, knownTranscript?: string | null): string {
   const contextLine = context && context.trim().length > 0
     ? `Context the user provided about what this recording is supposed to be:\n"${context.trim()}"\n\n`
     : `No context was provided about what this recording is supposed to be.\n\n`;
-  return `${contextLine}Analyze the attached audio.`;
+  const transcriptLine = knownTranscript && knownTranscript.trim().length > 0
+    ? `A separate pipeline has already produced this confirmed transcript of the recording's speech content — treat it as ground truth, never re-guess or contradict it, and never quote it verbatim yourself (that's not your job here):\n"${knownTranscript.trim()}"\n\n`
+    : "";
+  return `${contextLine}${transcriptLine}Analyze the attached audio.`;
 }
 
 const AI_LABEL_KEYS: Record<string, string> = {
@@ -306,7 +332,8 @@ export async function runAudioQuickCheck(
   audioBase64: string,
   mimeType: string,
   context: string | null,
-  language: Language = "en"
+  language: Language = "en",
+  knownTranscript?: string | null
 ): Promise<AudioAnalysisResult> {
   const { data } = await callStructured<AudioOutput>({
     // Sept 17, 2026: was "cheap" (gemini-3.1-flash-lite) — see
@@ -317,7 +344,7 @@ export async function runAudioQuickCheck(
     // difference between Quick and Deep for audio is now real but small.
     tier: "reasoning",
     systemPrompt: QUICK_SYSTEM_PROMPT + languageInstruction(language),
-    userPrompt: buildUserPrompt(context),
+    userPrompt: buildUserPrompt(context, knownTranscript),
     responseSchema: AUDIO_SCHEMA,
     audioParts: [{ mimeType, data: audioBase64 }],
     timeoutMs: 30_000,
@@ -331,12 +358,13 @@ export async function runAudioDeepInvestigation(
   audioBase64: string,
   mimeType: string,
   context: string | null,
-  language: Language = "en"
+  language: Language = "en",
+  knownTranscript?: string | null
 ): Promise<AudioAnalysisResult> {
   const { data } = await callStructured<AudioOutput>({
     tier: "reasoning",
     systemPrompt: DEEP_SYSTEM_PROMPT + languageInstruction(language),
-    userPrompt: buildUserPrompt(context),
+    userPrompt: buildUserPrompt(context, knownTranscript),
     responseSchema: AUDIO_SCHEMA,
     audioParts: [{ mimeType, data: audioBase64 }],
     timeoutMs: 30_000,

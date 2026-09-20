@@ -212,7 +212,7 @@ export async function POST(request: Request) {
   try {
     const [freshText, freshAudio] = await Promise.all([
       textCached || textSemanticMatch ? Promise.resolve(null) : runQuickCheck(transcript, language),
-      audioCached ? Promise.resolve(null) : runAudioQuickCheck(audioBase64, mimeType, context || null, language),
+      audioCached ? Promise.resolve(null) : runAudioQuickCheck(audioBase64, mimeType, context || null, language, transcript),
     ]);
     textResult = textCached ?? textSemanticMatch ?? (freshText as QuickCheckResult);
     audioResult = audioCached ?? (freshAudio as AudioAnalysisResult);
