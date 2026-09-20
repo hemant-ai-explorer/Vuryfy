@@ -19,6 +19,9 @@ export default function SettingsPage() {
   const { language, t, setLanguage } = useLanguage();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -44,6 +47,37 @@ export default function SettingsPage() {
     await supabase.auth.signOut();
     router.push("/");
     router.refresh();
+  }
+
+  // Delete my account — Sept 20, 2026. Implements Part 15's locked "delete
+  // account" user right (see app/api/account/delete/route.ts for what
+  // actually gets deleted/anonymized). English-only for now — same flagged,
+  // known i18n gap already used for newer, smaller features like the
+  // WhatsApp UI and the signup name field, rather than every one of these
+  // strings being run through 9 language dictionaries up front.
+  //
+  // No modal/confirm-dialog component exists anywhere in this app, so this
+  // is an inline two-step reveal instead: the button below only shows a
+  // warning panel with the real destructive action; nothing irreversible
+  // happens until that second, explicit click.
+  async function deleteAccount() {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch("/api/account/delete", { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setDeleteError(body?.error ?? "Try Again");
+        setDeleting(false);
+        return;
+      }
+      await supabase.auth.signOut();
+      router.push("/?accountDeleted=1");
+      router.refresh();
+    } catch {
+      setDeleteError("Try Again");
+      setDeleting(false);
+    }
   }
 
   return (
@@ -92,10 +126,67 @@ export default function SettingsPage() {
           {t("settings.moreComingSoon")}
         </p>
 
-        <div className="home-links" style={{ marginTop: 28 }}>
-          <button className="text-button" onClick={logout}>
+        {/* Sept 20, 2026: moved into its own panel, above Delete my account,
+            and re-colored red per the user's explicit styling request — the
+            usual "destructive = red" convention would put the red on Delete
+            my account instead, but this is a deliberate, asked-for choice,
+            not an accident. */}
+        <div className="panel" style={{ width: "100%", marginTop: 28 }}>
+          <button
+            className="text-button"
+            style={{ color: "#b42318" }}
+            onClick={logout}
+          >
             {t("home.signOut")}
           </button>
+        </div>
+
+        <div className="panel" style={{ width: "100%", marginTop: 14 }}>
+          {!showDeleteConfirm ? (
+            <button
+              className="text-button"
+              onClick={() => {
+                setShowDeleteConfirm(true);
+                setDeleteError(null);
+              }}
+            >
+              Delete my account
+            </button>
+          ) : (
+            <>
+              <div className="scam-warning">
+                <p className="caution" style={{ margin: 0 }}>
+                  This permanently deletes your account, including your
+                  verification history, credit balance, and saved
+                  preferences. This can&apos;t be undone.
+                </p>
+              </div>
+              {deleteError && (
+                <p className="hint" style={{ color: "#b42318" }}>
+                  {deleteError}
+                </p>
+              )}
+              <div className="result-actions" style={{ marginTop: 14 }}>
+                <button
+                  className="secondary"
+                  disabled={deleting}
+                  onClick={() => {
+                    setShowDeleteConfirm(false);
+                    setDeleteError(null);
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  style={{ background: "#b42318" }}
+                  disabled={deleting}
+                  onClick={deleteAccount}
+                >
+                  {deleting ? "Deleting…" : "Yes, permanently delete my account"}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </section>
     </main>

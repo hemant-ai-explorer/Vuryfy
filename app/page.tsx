@@ -28,6 +28,15 @@ export default function Home() {
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [credits, setCredits] = useState<Credits | null>(null);
   const [subscription, setSubscription] = useState<Subscription>(null);
+  // Post-delete confirmation (Sept 20, 2026) — app/settings/page.tsx
+  // redirects here with ?accountDeleted=1 right after a successful account
+  // deletion. Read via window.location directly in an effect, not
+  // next/navigation's useSearchParams, since that hook requires wrapping
+  // the page in a Suspense boundary to avoid de-opting the whole route to
+  // client-only rendering — not worth it for one flag on an already
+  // "use client" page. English-only, same flagged i18n gap as the rest of
+  // this file's newer additions.
+  const [accountDeleted, setAccountDeleted] = useState(false);
   // WhatsApp media-first flow (Part 13 rework, Sept 18, 2026) — see
   // supabase/migrations/0017_whatsapp_submissions.sql. English-only for
   // now, same flagged, known i18n gap as the rest of the WhatsApp UI.
@@ -36,6 +45,11 @@ export default function Home() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setSignedIn(!!data.user));
   }, [supabase]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setAccountDeleted(params.get("accountDeleted") === "1");
+  }, []);
 
   useEffect(() => {
     if (!signedIn) return;
@@ -75,6 +89,11 @@ export default function Home() {
           <div className="brand">Vuryfy</div>
         </nav>
         <section className="hero">
+          {accountDeleted && (
+            <p className="hint" style={{ marginBottom: 14 }}>
+              Your account has been deleted.
+            </p>
+          )}
           <p className="eyebrow">{t("landing.eyebrow")}</p>
           <h1>{t("landing.heading")}</h1>
           <p className="sub">{t("landing.sub")}</p>

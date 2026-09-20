@@ -1,0 +1,33 @@
+-- Account deletion support — Sept 20, 2026.
+--
+-- Part 15's locked spec commits to a user right to "delete account
+-- (triggers deletion/anonymization of associated personal data, subject to
+-- legally required retention for billing/fraud/legal/financial/security/
+-- dispute-resolution records, which are kept separate from user-generated
+-- content wherever possible)" — see app/api/account/delete/route.ts for the
+-- actual deletion flow this supports.
+--
+-- Calling supabase.auth.admin.deleteUser() cascades correctly (via existing
+-- FKs, ON DELETE CASCADE) through every other per-user table: profiles,
+-- subscriptions, credit_balances, verifications (and transitively
+-- verification_cache_exact/verification_cache_semantic), user_preferences,
+-- payment_payees_seen, whatsapp_link_codes, whatsapp_submissions. No schema
+-- change needed for any of those.
+--
+-- credit_transactions is the one exception: it's the append-only billing/
+-- audit ledger, and per the locked spec above it should be retained
+-- (anonymized), not destroyed, when an account is deleted — the same
+-- pattern content_moderation_flags already uses (ON DELETE SET NULL rather
+-- than CASCADE). Unlike that table, credit_transactions.user_id was
+-- declared NOT NULL in 0001_init.sql, since nothing anonymizes it in place
+-- — this migration just drops that constraint so the deletion route can
+-- set user_id = null on a user's rows before deleting their auth.users row,
+-- instead of letting the existing ON DELETE CASCADE destroy the ledger.
+-- The FK's ON DELETE CASCADE is left as-is: once user_id is already null,
+-- the cascade condition no longer applies to that row, so nothing further
+-- needs to change there.
+--
+-- Run this in the Supabase SQL Editor for BOTH vuryfy-test and vuryfy-prod,
+-- vuryfy-test first, verified end-to-end before vuryfy-prod.
+
+alter table credit_transactions alter column user_id drop not null;
