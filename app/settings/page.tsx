@@ -126,11 +126,25 @@ export default function SettingsPage() {
           {t("settings.moreComingSoon")}
         </p>
 
+        {/* Sept 20, 2026: moved into its own panel, above Delete my account,
+            and re-colored red per the user's explicit styling request — the
+            usual "destructive = red" convention would put the red on Delete
+            my account instead, but this is a deliberate, asked-for choice,
+            not an accident. */}
         <div className="panel" style={{ width: "100%", marginTop: 28 }}>
+          <button
+            className="text-button"
+            style={{ color: "#b42318" }}
+            onClick={logout}
+          >
+            {t("home.signOut")}
+          </button>
+        </div>
+
+        <div className="panel" style={{ width: "100%", marginTop: 14 }}>
           {!showDeleteConfirm ? (
             <button
               className="text-button"
-              style={{ color: "#b42318" }}
               onClick={() => {
                 setShowDeleteConfirm(true);
                 setDeleteError(null);
@@ -173,12 +187,6 @@ export default function SettingsPage() {
               </div>
             </>
           )}
-        </div>
-
-        <div className="home-links" style={{ marginTop: 28 }}>
-          <button className="text-button" onClick={logout}>
-            {t("home.signOut")}
-          </button>
         </div>
       </section>
     </main>
