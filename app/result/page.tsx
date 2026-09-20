@@ -168,6 +168,18 @@ function ResultView() {
   const isDeep = r.mode === "deep";
   const newCheckHref = r.return_to || (isDeep ? "/deep" : "/verify");
 
+  // QR-sourced results only (return_to === "/verify/qr", set by both
+  // app/verify/qr/page.tsx's confirm() and investigatePayee()): the
+  // confidence % measures "how well the public web documents this claim,"
+  // not "how safe is this." For a QR scan that's usually a small vendor's
+  // UPI ID or a niche URL with zero web footprint either way, so a low
+  // number reads as "probably risky" when it actually just means "no data
+  // exists" — misleading for what is, for QR specifically, the common
+  // case rather than the exception. User's explicit call (Sept 20, 2026):
+  // drop the confidence number for QR results, keep everything else
+  // (identity, scam status, explanation, evidence, caveats) unchanged.
+  const hideConfidenceForQr = r.return_to === "/verify/qr";
+
   if (r.type === "payment_receipt") {
     return (
       <main className="shell narrow">
@@ -325,19 +337,23 @@ function ResultView() {
           {isScam ? (
             <div className="scam-warning">
               <span>{t("result.scamWarning")}</span>
-              <div className="confidence">
-                {t("result.confidencePrefix")}
-                {r.confidence}%
-              </div>
+              {!hideConfidenceForQr && (
+                <div className="confidence">
+                  {t("result.confidencePrefix")}
+                  {r.confidence}%
+                </div>
+              )}
               <p className="caution">{t("result.scamCaution")}</p>
             </div>
           ) : (
             <>
               <p className="hint">{t("result.payeeClear")}</p>
-              <div className="confidence">
-                {t("result.confidencePrefix")}
-                {r.confidence}%
-              </div>
+              {!hideConfidenceForQr && (
+                <div className="confidence">
+                  {t("result.confidencePrefix")}
+                  {r.confidence}%
+                </div>
+              )}
             </>
           )}
           <div className="explanation">
@@ -403,19 +419,23 @@ function ResultView() {
           <div className="scam-warning">
             <span>{t("result.scamWarning")}</span>
             <div className="verdict">{translateVerdict(language, "Scam")}</div>
-            <div className="confidence">
-              {t("result.confidencePrefix")}
-              {r.confidence}%
-            </div>
+            {!hideConfidenceForQr && (
+              <div className="confidence">
+                {t("result.confidencePrefix")}
+                {r.confidence}%
+              </div>
+            )}
             <p className="caution">{t("result.scamCaution")}</p>
           </div>
         ) : (
           <>
             <div className="verdict">{translateVerdict(language, r.verdict)}</div>
-            <div className="confidence">
-              {t("result.confidencePrefix")}
-              {r.confidence}%
-            </div>
+            {!hideConfidenceForQr && (
+              <div className="confidence">
+                {t("result.confidencePrefix")}
+                {r.confidence}%
+              </div>
+            )}
           </>
         )}
         <div className="claim">
