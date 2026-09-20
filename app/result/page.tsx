@@ -89,6 +89,24 @@ function ResultView() {
   const [notFound, setNotFound] = useState(false);
   const [payeeChecking, setPayeeChecking] = useState<"quick" | "deep" | null>(null);
   const [payeeCheckError, setPayeeCheckError] = useState("");
+  // "Share result" feedback (Sept 20, 2026 fix) — the button previously
+  // called navigator.clipboard.writeText with no success/failure feedback
+  // at all, so a denied clipboard permission (as happened in testing) failed
+  // completely silently. shareStatus drives a small inline message next to
+  // the button, reset after a couple seconds so it doesn't linger.
+  const [shareStatus, setShareStatus] = useState<"idle" | "copied" | "error">("idle");
+
+  async function shareResultText(text: string) {
+    try {
+      if (!navigator.clipboard) throw new Error("Clipboard API unavailable");
+      await navigator.clipboard.writeText(text);
+      setShareStatus("copied");
+    } catch {
+      setShareStatus("error");
+    } finally {
+      setTimeout(() => setShareStatus("idle"), 2500);
+    }
+  }
 
   // Sept 18, 2026: added the fetch-by-id fallback alongside the WhatsApp
   // submission MVP and the new history list (app/saved/page.tsx) — a past
@@ -382,7 +400,7 @@ function ResultView() {
           <div className="result-actions">
             <button
               onClick={() =>
-                navigator.clipboard?.writeText(
+                shareResultText(
                   (r.payee?.name ? `${r.payee.name} — ${r.payee.upiId}` : r.payee?.upiId || r.claim) +
                     "\n\n" +
                     (isScam ? "SCAM" : t("result.payeeClear")) +
@@ -397,6 +415,8 @@ function ResultView() {
               {t("result.verifyAnother")}
             </button>
           </div>
+          {shareStatus === "copied" && <p className="hint">{t("result.copied")}</p>}
+          {shareStatus === "error" && <p className="error">{t("result.copyFailed")}</p>}
         </section>
       </main>
     );
@@ -490,9 +510,7 @@ function ResultView() {
         )}
         <div className="result-actions">
           <button
-            onClick={() =>
-              navigator.clipboard?.writeText(r.claim + "\n\n" + r.verdict + "\n" + r.explanation)
-            }
+            onClick={() => shareResultText(r.claim + "\n\n" + r.verdict + "\n" + r.explanation)}
           >
             {t("result.shareResult")}
           </button>
@@ -500,6 +518,8 @@ function ResultView() {
             {t("result.verifyAnother")}
           </button>
         </div>
+        {shareStatus === "copied" && <p className="hint">{t("result.copied")}</p>}
+        {shareStatus === "error" && <p className="error">{t("result.copyFailed")}</p>}
       </section>
     </main>
   );
