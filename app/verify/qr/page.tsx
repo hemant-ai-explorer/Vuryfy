@@ -138,7 +138,12 @@ export default function VerifyQrPage() {
       });
       const d = await parseJsonResponse(r);
       if (!r.ok) throw new Error(d.error || (mode === "quick" ? "Verification failed" : "Investigation failed"));
-      sessionStorage.setItem("vuryfy_result", JSON.stringify(d));
+      // return_to: "verify another" on the result page needs to know this
+      // came from the QR upload screen, not the generic text claim form it
+      // falls back to otherwise (see the Result type's return_to comment in
+      // app/result/page.tsx). Mirrors investigatePayee() below, which
+      // already set this for payment-QR payee checks.
+      sessionStorage.setItem("vuryfy_result", JSON.stringify({ ...d, return_to: "/verify/qr" }));
       router.push(`/result?id=${d.id}`);
     } catch (e: any) {
       setSubmitError(e.message);
