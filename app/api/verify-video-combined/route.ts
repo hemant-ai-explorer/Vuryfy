@@ -22,6 +22,7 @@ import {
   AUDIO_CACHE_FRESHNESS,
   type CachedVerification,
 } from "@/lib/verification-cache";
+import { track } from "@/lib/analytics";
 
 // Route-level execution budget — Sept 15, 2026: raised from 60s to 300s
 // (Pro's generally-available default/max under Fluid compute) — see
@@ -111,6 +112,10 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+
+  // Analytics (Part 23, Sept 21, 2026) — see lib/analytics.ts's header.
+  track(user.id, "verification_submitted", { mode: "quick", input_type: "video_combined" });
+
   const language = await getUserLanguage(admin, user.id);
   const textCacheNamespace = language === "en" ? "video_transcript" : `video_transcript:${language}`;
   const videoCacheNamespace = language === "en" ? "video" : `video:${language}`;
@@ -129,6 +134,7 @@ export async function POST(request: Request) {
     );
   }
   if (remaining === null || remaining === undefined) {
+    track(user.id, "credits_exhausted", { mode: "quick", credit_type: "quick_check" });
     return NextResponse.json(
       { error: "You're out of Quick Check credits. Upgrade your plan to continue." },
       { status: 402 }
@@ -216,6 +222,11 @@ export async function POST(request: Request) {
     if (contentFlagged) {
       return NextResponse.json({ error: "This content can't be processed." }, { status: 422 });
     }
+    track(user.id, "verification_failed", {
+      mode: "quick",
+      input_type: "video_combined",
+      reason: isStorageError ? "storage_error" : "infra_error",
+    });
     return NextResponse.json(
       {
         error: isStorageError ? err.message : "Try Again",
@@ -338,6 +349,23 @@ export async function POST(request: Request) {
     .single();
 
   await cleanupVideoFile(admin, storagePath, geminiFileName, true);
+
+  track(user.id, "verification_completed", {
+    mode: "quick",
+    input_type: "video_transcript",
+    verdict: transcriptRow.verdict,
+    cached: textCacheHit,
+    credit_charged: true,
+  });
+  if (videoRow) {
+    track(user.id, "verification_completed", {
+      mode: "quick",
+      input_type: "video",
+      verdict: videoRow.verdict,
+      cached: videoCacheHit,
+      credit_charged: false,
+    });
+  }
 
   return NextResponse.json({
     id: transcriptRow.id,

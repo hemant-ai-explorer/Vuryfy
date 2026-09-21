@@ -6,6 +6,7 @@ import { runAudioQuickCheck, AUDIO_QUICK_ENGINE_VERSION, type AudioAnalysisResul
 import { getUserLanguage } from "@/lib/user-language";
 import { translate } from "@/lib/translations";
 import { checkContentSafety, ContentFlaggedError, hashBase64 } from "@/lib/content-safety";
+import { track } from "@/lib/analytics";
 import {
   computeCacheKey,
   getCachedVerification,
@@ -123,6 +124,9 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient();
 
+  // Analytics (Part 23, Sept 21, 2026) — see lib/analytics.ts's header.
+  track(user.id, "verification_submitted", { mode: "quick", input_type: "audio_combined" });
+
   // Content safety (Part 15, Sept 19, 2026) — scan before any credit is
   // charged or the audio reaches an AI provider. See lib/content-safety.ts's
   // file header (currently a stub; no real hash-matching provider is wired
@@ -161,6 +165,7 @@ export async function POST(request: Request) {
     );
   }
   if (remaining === null || remaining === undefined) {
+    track(user.id, "credits_exhausted", { mode: "quick", credit_type: "quick_check" });
     return NextResponse.json(
       { error: "You're out of Quick Check credits. Upgrade your plan to continue." },
       { status: 402 }
@@ -228,6 +233,8 @@ export async function POST(request: Request) {
       { user_id: user.id, credit_type: "quick_check", amount: -1, reason: "quick_check_reserved" },
       { user_id: user.id, credit_type: "quick_check", amount: 1, reason: "quick_check_refunded_infra_error" },
     ]);
+
+    track(user.id, "verification_failed", { mode: "quick", input_type: "audio_combined", reason: "infra_error" });
 
     return NextResponse.json(
       {
@@ -330,6 +337,23 @@ export async function POST(request: Request) {
     .select("quick_checks_remaining, deep_investigations_remaining")
     .eq("user_id", user.id)
     .single();
+
+  track(user.id, "verification_completed", {
+    mode: "quick",
+    input_type: "audio_transcript",
+    verdict: transcriptRow.verdict,
+    cached: textCacheHit,
+    credit_charged: true,
+  });
+  if (audioRow) {
+    track(user.id, "verification_completed", {
+      mode: "quick",
+      input_type: "audio",
+      verdict: audioRow.verdict,
+      cached: audioCacheHit,
+      credit_charged: false,
+    });
+  }
 
   return NextResponse.json({
     id: transcriptRow.id,
