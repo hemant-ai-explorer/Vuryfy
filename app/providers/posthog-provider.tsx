@@ -2,6 +2,7 @@
 import { Suspense, useEffect } from "react";
 import posthog from "posthog-js";
 import { usePathname, useSearchParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 // Client-side PostHog init (Part 23, LOCKED spec) — Sept 21, 2026. See
 // lib/analytics.ts for the server-side half and the full taxonomy/privacy
@@ -67,6 +68,25 @@ function PageviewTracker() {
 export function PostHogProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     initPostHog();
+
+    // Sept 21, 2026 fix: identify() was previously only called from the
+    // explicit OTP-verify moment in app/login/page.tsx, which left every
+    // pageview from an ALREADY-authenticated session — a returning visitor
+    // whose Supabase cookie is still valid, the common case on any repeat
+    // visit — tracked under PostHog's own anonymous visitor ID, never
+    // merged into the real user. Confirmed live in PostHog's Activity view:
+    // pageviews and the same session's verification_submitted server event
+    // showed up as two different people. Checking for an existing session
+    // here, once per app load, closes that gap. Read-only (getUser(), no
+    // side effects on the session itself) — reuses the same browser
+    // Supabase client app/login/page.tsx already uses for auth.
+    if (!initialized) return;
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        posthog.identify(user.id);
+      }
+    });
   }, []);
 
   return (
