@@ -13,6 +13,7 @@ import {
   writeSemanticCache,
   type CachedVerification,
 } from "@/lib/verification-cache";
+import { track } from "@/lib/analytics";
 
 // Route-level execution budget (Sept 2026 fix — see app/api/deep/route.ts's
 // comment for the full rationale). 60 is Hobby's max; without it Vercel's
@@ -71,6 +72,10 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+
+  // Analytics (Part 23, Sept 21, 2026) — see lib/analytics.ts's header.
+  track(user.id, "verification_submitted", { mode: "deep", input_type: "payee_reputation" });
+
   const language = await getUserLanguage(admin, user.id);
   const cacheNamespace = language === "en" ? "payee_reputation" : `payee_reputation:${language}`;
   const searchClaim = buildPayeeClaim(payeeName, upiId);
@@ -90,6 +95,7 @@ export async function POST(request: Request) {
     );
   }
   if (remaining === null || remaining === undefined) {
+    track(user.id, "credits_exhausted", { mode: "deep", credit_type: "deep_investigation" });
     return NextResponse.json(
       { error: "You're out of Deep Investigation credits. Upgrade your plan to continue." },
       { status: 402 }
@@ -134,6 +140,8 @@ export async function POST(request: Request) {
         { user_id: user.id, credit_type: "deep_investigation", amount: -1, reason: "deep_investigation_reserved" },
         { user_id: user.id, credit_type: "deep_investigation", amount: 1, reason: "deep_investigation_refunded_infra_error" },
       ]);
+
+      track(user.id, "verification_failed", { mode: "deep", input_type: "payee_reputation", reason: "infra_error" });
 
       return NextResponse.json(
         {
@@ -212,6 +220,15 @@ export async function POST(request: Request) {
     .select("quick_checks_remaining, deep_investigations_remaining")
     .eq("user_id", user.id)
     .single();
+
+  track(user.id, "verification_completed", {
+    mode: "deep",
+    input_type: "payee_reputation",
+    verdict: verification.verdict,
+    cached: cacheHit,
+    cache_match_type: cacheMatchType,
+    engine_version: verification.engine_version,
+  });
 
   return NextResponse.json({
     id: verification.id,

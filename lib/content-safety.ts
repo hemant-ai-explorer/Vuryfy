@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
+import { track } from "@/lib/analytics";
 
 // Illegal/harmful content handling pipeline (Part 15, LOCKED spec) — Sept
 // 19, 2026. See supabase/migrations/0019_content_moderation.sql for the
@@ -184,6 +185,17 @@ export async function checkContentSafety(params: {
     // flagged content proceeds.
     console.error("[content-safety] failed to write content_moderation_flags row:", insertError);
   }
+
+  // Analytics (Part 23, Sept 21, 2026) — see lib/analytics.ts's header.
+  // This single call site covers every image/audio/video route (direct
+  // and combined), since they all funnel through checkContentSafety(). No
+  // claim text or media, just the same metadata already written to
+  // content_moderation_flags above.
+  track(userId, "content_flagged", {
+    content_type: contentType,
+    source_route: sourceRoute,
+    scan_provider: result.provider,
+  });
 
   throw new ContentFlaggedError(result.reason ?? "flagged");
 }

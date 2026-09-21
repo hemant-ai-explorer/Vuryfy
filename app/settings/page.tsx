@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useLanguage } from "@/app/providers/language-provider";
 import { SUPPORTED_LANGUAGES, type Language } from "@/lib/translations";
+import { posthog } from "@/app/providers/posthog-provider";
 
 // Minimal settings page — Sept 16, 2026. Created specifically to hold the
 // language preference the multilingual rollout needs a persistent home
@@ -45,6 +46,10 @@ export default function SettingsPage() {
   // home page already had, rather than adding a new one.
   async function logout() {
     await supabase.auth.signOut();
+    // Analytics (Part 23, Sept 21, 2026) — ends this browser's identified
+    // session so any further pageviews before a future sign-in are
+    // correctly anonymous again rather than misattributed to this account.
+    posthog.reset();
     router.push("/");
     router.refresh();
   }
@@ -72,6 +77,12 @@ export default function SettingsPage() {
         return;
       }
       await supabase.auth.signOut();
+      // Analytics (Part 23, Sept 21, 2026) — same reasoning as logout()
+      // above. The user_account_deleted event itself is fired server-side
+      // in app/api/account/delete/route.ts, before this reset(), since the
+      // route still has the user id in hand and this client call happens
+      // after the account (and its identity) is already gone.
+      posthog.reset();
       router.push("/?accountDeleted=1");
       router.refresh();
     } catch {

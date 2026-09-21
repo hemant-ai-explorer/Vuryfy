@@ -13,6 +13,8 @@
     "@supabase/supabase-js": "^2.45.0",
     "jsqr": "^1.4.0",
     "next": "^15.5.0",
+    "posthog-js": "^1.194.0",
+    "posthog-node": "^4.3.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "tesseract.js": "^5.1.0"

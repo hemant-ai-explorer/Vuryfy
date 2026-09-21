@@ -19,6 +19,7 @@ import {
   AUDIO_CACHE_FRESHNESS,
   type CachedVerification,
 } from "@/lib/verification-cache";
+import { track } from "@/lib/analytics";
 
 // Route-level execution budget — Sept 15, 2026: raised from 60s to 300s
 // (Pro's generally-available default/max under Fluid compute) — see
@@ -74,6 +75,10 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+
+  // Analytics (Part 23, Sept 21, 2026) — see lib/analytics.ts's header.
+  track(user.id, "verification_submitted", { mode: "deep", input_type: "video" });
+
   const language = await getUserLanguage(admin, user.id);
   const videoCacheNamespace = language === "en" ? "video" : `video:${language}`;
 
@@ -90,6 +95,7 @@ export async function POST(request: Request) {
   }
 
   if (remaining === null || remaining === undefined) {
+    track(user.id, "credits_exhausted", { mode: "deep", credit_type: "deep_investigation" });
     return NextResponse.json(
       { error: "You're out of Deep Investigation credits. Upgrade your plan to continue." },
       { status: 402 }
@@ -144,6 +150,11 @@ export async function POST(request: Request) {
     if (contentFlagged) {
       return NextResponse.json({ error: "This content can't be processed." }, { status: 422 });
     }
+    track(user.id, "verification_failed", {
+      mode: "deep",
+      input_type: "video",
+      reason: isStorageError ? "storage_error" : "infra_error",
+    });
     return NextResponse.json(
       {
         error: isStorageError ? err.message : "Try Again",
@@ -217,6 +228,14 @@ export async function POST(request: Request) {
     .single();
 
   await cleanupVideoFile(admin, storagePath, geminiFileName, true);
+
+  track(user.id, "verification_completed", {
+    mode: "deep",
+    input_type: "video",
+    verdict: verification.verdict,
+    cached: cacheHit,
+    engine_version: verification.engine_version,
+  });
 
   return NextResponse.json({
     id: verification.id,

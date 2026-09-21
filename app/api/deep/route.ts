@@ -14,6 +14,7 @@ import {
 import { detectPaymentReceipt } from "@/lib/detect-payment-receipt";
 import { detectPaymentRequest } from "@/lib/detect-payment-request";
 import { getUserLanguage } from "@/lib/user-language";
+import { track } from "@/lib/analytics";
 
 // Route-level execution budget (Sept 2026 fix, added across every AI-
 // calling route after the video-upload 413 investigation surfaced that
@@ -89,6 +90,9 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient();
 
+  // Analytics (Part 23, Sept 21, 2026) — see lib/analytics.ts's header.
+  track(user.id, "verification_submitted", { mode: "deep", input_type: inputType });
+
   const receipt = detectPaymentReceipt(claim);
   if (receipt) {
     const { data: balance } = await admin
@@ -160,6 +164,7 @@ export async function POST(request: Request) {
   }
 
   if (remaining === null || remaining === undefined) {
+    track(user.id, "credits_exhausted", { mode: "deep", credit_type: "deep_investigation" });
     return NextResponse.json(
       { error: "You're out of Deep Investigation credits. Upgrade your plan to continue." },
       { status: 402 }
@@ -208,6 +213,8 @@ export async function POST(request: Request) {
         { user_id: user.id, credit_type: "deep_investigation", amount: -1, reason: "deep_investigation_reserved" },
         { user_id: user.id, credit_type: "deep_investigation", amount: 1, reason: "deep_investigation_refunded_infra_error" },
       ]);
+
+      track(user.id, "verification_failed", { mode: "deep", input_type: inputType, reason: "infra_error" });
 
       // Same terse "Try Again" convention as Quick Check (Sept 14, 2026) —
       // the AI Gateway already retries transient provider failures
@@ -292,6 +299,15 @@ export async function POST(request: Request) {
     .select("quick_checks_remaining, deep_investigations_remaining")
     .eq("user_id", user.id)
     .single();
+
+  track(user.id, "verification_completed", {
+    mode: "deep",
+    input_type: inputType,
+    verdict: verification.verdict,
+    cached: cacheHit,
+    cache_match_type: cacheMatchType,
+    engine_version: verification.engine_version,
+  });
 
   return NextResponse.json({
     id: verification.id,

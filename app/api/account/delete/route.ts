@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { track } from "@/lib/analytics";
 
 // Account deletion — Sept 20, 2026. Implements Part 15's locked user right:
 // "delete account (triggers deletion/anonymization of associated personal
@@ -95,6 +96,13 @@ export async function POST() {
       { status: 502 }
     );
   }
+
+  // Analytics (Part 23, Sept 21, 2026) — fired only once deletion actually
+  // succeeded, using the userId captured before deleteUser() ran (the
+  // distinctId doesn't need to reference a still-live row). See
+  // lib/analytics.ts's header for the privacy rules this follows
+  // (pseudonymous ID only, no other user data attached).
+  track(userId, "user_account_deleted", {});
 
   return NextResponse.json({ ok: true });
 }

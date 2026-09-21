@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { track } from "@/lib/analytics";
 
 // Stub subscribe endpoint — Sept 19, 2026, built alongside the new
 // app/onboarding/payment/page.tsx plan-picker (see
@@ -113,6 +114,12 @@ export async function POST(request: Request) {
     // fix, not a reason to fail the user's signup.
     if (txError) console.error("[subscribe] credit transaction log failed:", txError);
   }
+
+  // Analytics (Part 23, Sept 21, 2026) — see lib/analytics.ts's header.
+  // Fired only for a genuinely new subscription, not the idempotent
+  // already-active-subscription branch above, so this maps to real revenue
+  // events rather than every re-visit of the payment stub page.
+  track(user.id, "plan_subscribed", { plan_code: plan.code, price_inr: plan.price_inr });
 
   return NextResponse.json({ plan_code: plan.code, already_subscribed: false });
 }

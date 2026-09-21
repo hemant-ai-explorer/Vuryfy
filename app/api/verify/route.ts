@@ -13,6 +13,7 @@ import {
 import { detectPaymentReceipt } from "@/lib/detect-payment-receipt";
 import { detectPaymentRequest } from "@/lib/detect-payment-request";
 import { getUserLanguage } from "@/lib/user-language";
+import { track } from "@/lib/analytics";
 
 // Route-level execution budget (Sept 2026 fix, added across every AI-
 // calling route after the video-upload 413 investigation surfaced that
@@ -103,6 +104,12 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient();
 
+  // Analytics (Part 23, Sept 21, 2026) — see lib/analytics.ts's header.
+  // Fired for every real attempt, including ones that turn out to be a
+  // payment receipt/request or that run out of credit below, so the
+  // funnel shows the true drop-off rather than only successes.
+  track(user.id, "verification_submitted", { mode: "quick", input_type: inputType });
+
   const receipt = detectPaymentReceipt(claim);
   if (receipt) {
     const { data: balance } = await admin
@@ -187,6 +194,7 @@ export async function POST(request: Request) {
   }
 
   if (remaining === null || remaining === undefined) {
+    track(user.id, "credits_exhausted", { mode: "quick", credit_type: "quick_check" });
     return NextResponse.json(
       { error: "You're out of Quick Check credits. Upgrade your plan to continue." },
       { status: 402 }
@@ -246,6 +254,8 @@ export async function POST(request: Request) {
         { user_id: user.id, credit_type: "quick_check", amount: -1, reason: "quick_check_reserved" },
         { user_id: user.id, credit_type: "quick_check", amount: 1, reason: "quick_check_refunded_infra_error" },
       ]);
+
+      track(user.id, "verification_failed", { mode: "quick", input_type: inputType, reason: "infra_error" });
 
       // User-facing message kept short by request — "Try Again" — since the
       // AI Gateway now retries transient provider failures (503/429/5xx)
@@ -338,6 +348,15 @@ export async function POST(request: Request) {
     .select("quick_checks_remaining, deep_investigations_remaining")
     .eq("user_id", user.id)
     .single();
+
+  track(user.id, "verification_completed", {
+    mode: "quick",
+    input_type: inputType,
+    verdict: verification.verdict,
+    cached: cacheHit,
+    cache_match_type: cacheMatchType,
+    engine_version: verification.engine_version,
+  });
 
   return NextResponse.json({
     id: verification.id,

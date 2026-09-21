@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useLanguage } from "@/app/providers/language-provider";
 import { SUPPORTED_LANGUAGES, type Language } from "@/lib/translations";
+import { posthog } from "@/app/providers/posthog-provider";
 
 // Phone OTP via Supabase Auth directly (no custom backend endpoint —
 // Supabase handles the challenge/verify state itself). Real SMS delivery
@@ -87,7 +88,7 @@ function LoginForm() {
   async function verify() {
     setLoading(true);
     setMessage("");
-    const { error } = await supabase.auth.verifyOtp({
+    const { data, error } = await supabase.auth.verifyOtp({
       phone: toE164(phone),
       token: otp.trim(),
       type: "sms",
@@ -96,6 +97,17 @@ function LoginForm() {
       setMessage(error.message);
       setLoading(false);
       return;
+    }
+
+    // Analytics (Part 23, Sept 21, 2026) — see lib/analytics.ts's header
+    // for the full taxonomy/privacy rationale (identical rules here:
+    // pseudonymous ID only). identify() links this browser's earlier
+    // anonymous pageviews (landing page, pricing, etc.) to the real
+    // account the moment it exists, before the signup/signin event below
+    // so that event lands on the identified profile rather than a
+    // soon-to-be-orphaned anonymous one.
+    if (data.user) {
+      posthog.identify(data.user.id);
     }
 
     if (isSignup) {
@@ -115,6 +127,7 @@ function LoginForm() {
       } catch (err) {
         console.error("[login] saving signup name/language failed:", err);
       }
+      posthog.capture("user_signed_up", { language: selectedLanguage });
       // justAuthenticated=true — see language-provider.tsx's refresh() header
       // comment: right after verifyOtp() resolves, the session cookie isn't
       // always readable yet by this immediate /api/preferences call, so a
@@ -129,6 +142,7 @@ function LoginForm() {
     // Sign-in (or no intent) — now check whether a language preference
     // already exists before deciding where to send the user next.
     // justAuthenticated=true for the same reason as the signup branch above.
+    posthog.capture("user_signed_in");
     await refresh(true);
     setOtpVerified(true);
     setLoading(false);
