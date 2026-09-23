@@ -41,11 +41,22 @@ import { useElapsedSeconds } from "@/lib/use-elapsed-seconds";
 // near-miss the user reported — see app/api/check-payee/route.ts and
 // migration 0007 for the full rationale): every detected payment QR's
 // payee name + UPI ID is checked against the user's own scan history via
-// the free /api/check-payee route. A name that's near-identical to one
-// already seen, but under a DIFFERENT UPI ID, surfaces an extra warning
-// card above the standard payment-QR caution — a common impersonation
-// pattern this doesn't claim to resolve (it never says which of the two
-// is the real one), only surfaces for the user to check before paying.
+// the free /api/check-payee route, and every scan is recorded regardless
+// of whether the user goes on to investigate it. A name that's near-
+// identical to one already seen, but under a DIFFERENT UPI ID, is a
+// common impersonation pattern this doesn't claim to resolve (it never
+// says which of the two is the real one) — only surfaces for the user to
+// check before paying.
+//
+// Sept 23, 2026: that warning used to render immediately on this
+// pre-choice screen, for free, before Quick Check/Deep Investigation was
+// chosen. Per explicit direction, it no longer does — like the payee's
+// identity, a known-impersonation match is now only shown as part of the
+// credit-charged QC/DI result (see app/api/verify-payee/route.ts,
+// app/api/deep-payee/route.ts, and app/result/page.tsx's payee_reputation
+// branch). The free /api/check-payee call here still runs and still
+// records this scan into history — that part is unchanged and stays free
+// — it just no longer decides what's shown on screen.
 //
 // Payee reputation investigation (added Sept 15, 2026, prompted by "what
 // if I want Deep Investigation on this payment QR?"): the payment-QR
@@ -61,8 +72,6 @@ import { useElapsedSeconds } from "@/lib/use-elapsed-seconds";
 // payment-info card's "Scan another" action, and only for UPI payment
 // links (there's no payee identity to search for a bare payment-link URL
 // like paypal.me).
-type PayeeSimilarMatch = { payeeName: string; upiId: string; similarity: number; firstSeenAt: string };
-
 export default function VerifyQrPage() {
   const router = useRouter();
   const supabase = createClient();
@@ -71,7 +80,6 @@ export default function VerifyQrPage() {
   const [decoding, setDecoding] = useState(false);
   const [decoded, setDecoded] = useState<string | null>(null);
   const [paymentInfo, setPaymentInfo] = useState<PaymentLinkInfo | null>(null);
-  const [payeeWarning, setPayeeWarning] = useState<PayeeSimilarMatch | null>(null);
   const [decodeError, setDecodeError] = useState("");
   const [submitting, setSubmitting] = useState<"quick" | "deep" | null>(null);
   const [submitError, setSubmitError] = useState("");
@@ -93,7 +101,6 @@ export default function VerifyQrPage() {
     setDecodeError("");
     setDecoded(null);
     setPaymentInfo(null);
-    setPayeeWarning(null);
     setPayeeCheckError("");
     try {
       const result = await decodeQrFromFile(file);
@@ -105,20 +112,19 @@ export default function VerifyQrPage() {
       if (payment) {
         setPaymentInfo(payment);
         if (payment.payeeId) {
-          try {
-            const r = await fetch("/api/check-payee", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ upi_id: payment.payeeId, payee_name: payment.payeeName ?? "" }),
-            });
-            const d = await parseJsonResponse(r);
-            if (r.ok && d.similarMatch) {
-              setPayeeWarning(d.similarMatch);
-            }
-          } catch {
-            // Bonus safety check only — never let a failure here block the
+          // Fire-and-forget: this only records the scan into history for
+          // future look-alike comparisons (see the header comment above).
+          // Its similarMatch result is intentionally ignored here — that's
+          // now only ever shown after a paid QC/DI, via
+          // app/api/verify-payee|deep-payee's own fresh lookup.
+          fetch("/api/check-payee", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ upi_id: payment.payeeId, payee_name: payment.payeeName ?? "" }),
+          }).catch(() => {
+            // Bonus recording only — never let a failure here block the
             // payment-info card the user actually needs to see.
-          }
+          });
         }
       } else {
         setDecoded(result);
@@ -182,7 +188,6 @@ export default function VerifyQrPage() {
   function reset() {
     setDecoded(null);
     setPaymentInfo(null);
-    setPayeeWarning(null);
     setDecodeError("");
     setSubmitError("");
     setPayeeCheckError("");
@@ -234,31 +239,20 @@ export default function VerifyQrPage() {
 
         {paymentInfo && (
           <div className="qr-payment">
-            {/* Sept 17, 2026: this card deliberately does NOT reveal the
-                payee's name/UPI ID here — that used to render immediately
-                after choosing the photo, before the user had picked Quick
-                Check or Deep Investigation, which read as "showing the
-                outcome" before the user made a choice. Identity now shows
-                only on the result page (app/result/page.tsx's
-                payee_reputation branch), after QC/DI is chosen. The one
-                exception is the impersonation warning below: it's free,
-                instant, and its entire value is catching a look-alike scam
-                BEFORE the user commits to paying or investigating, so it
-                still surfaces immediately. */}
+            {/* Sept 17, 2026, updated Sept 23, 2026: this card deliberately
+                does NOT reveal the payee's name/UPI ID, or whether it's a
+                known look-alike/impersonation match, here — none of that
+                shows before the user has picked Quick Check or Deep
+                Investigation and a credit has been charged. Both identity
+                and any impersonation warning now show only on the result
+                page (app/result/page.tsx's payee_reputation branch), after
+                QC/DI is chosen. This card only shows a category label
+                ("this is a payment QR code") plus what the paid check will
+                do. */}
             <span>{t("qr.paymentBadge")}</span>
-            {payeeWarning && (
-              <div className="scam-warning">
-                <span>{t("qr.similarNameWarning")}</span>
-                <p className="caution">
-                  {t("qr.similarNameCaution")
-                    .replace("{name}", payeeWarning.payeeName)
-                    .replace("{id}", payeeWarning.upiId)}
-                </p>
-              </div>
-            )}
 
             {paymentInfo.kind === "upi" && paymentInfo.payeeId ? (
-              <div className="qr-decoded" style={{ marginTop: payeeWarning ? 20 : 0 }}>
+              <div className="qr-decoded">
                 <p className="hint">{t("qr.investigateHint")}</p>
                 <div className="result-actions">
                   <button

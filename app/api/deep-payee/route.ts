@@ -3,6 +3,7 @@ import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runDeepInvestigation, DEEP_ENGINE_VERSION, type DeepInvestigationResult } from "@/lib/deep-investigation";
 import { normalizeClaim } from "@/lib/quick-check";
+import { findSimilarPayee } from "@/lib/payee-similarity";
 import { getUserLanguage } from "@/lib/user-language";
 import { translate } from "@/lib/translations";
 import {
@@ -155,6 +156,11 @@ export async function POST(request: Request) {
     }
   }
 
+  // Sept 23, 2026: see app/api/verify-payee/route.ts's identical comment —
+  // the impersonation/look-alike warning now surfaces only as part of this
+  // credit-charged result, never on the free pre-choice payment card.
+  const similarMatch = await findSimilarPayee(admin, user.id, upiId, payeeName);
+
   const caveats = [translate(language, "payee.disclaimer"), ...(result.caveats ?? [])];
 
   const { data: verification, error: insertError } = await admin
@@ -239,6 +245,7 @@ export async function POST(request: Request) {
     // same way it renders Quick Check ones.
     type: "payee_reputation",
     payee: { name: payeeName || null, upiId },
+    similarMatch,
     claim: verification.claim_text,
     verdict: verification.verdict,
     confidence: verification.confidence,

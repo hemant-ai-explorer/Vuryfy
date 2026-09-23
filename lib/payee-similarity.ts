@@ -57,3 +57,54 @@ export function nameSimilarity(a: string, b: string): number {
   const maxLen = Math.max(na.length, nb.length);
   return maxLen === 0 ? 1 : 1 - distance / maxLen;
 }
+
+const SIMILARITY_THRESHOLD = 0.82;
+
+export type PayeeSimilarMatch = {
+  payeeName: string;
+  upiId: string;
+  similarity: number;
+  firstSeenAt: string;
+};
+
+// Sept 23, 2026: factored out of app/api/check-payee/route.ts so the same
+// lookup can run from app/api/verify-payee/route.ts and app/api/deep-
+// payee/route.ts too. Reason: the impersonation warning used to surface
+// immediately, for free, the moment a payment QR was decoded — before the
+// user had chosen Quick Check or Deep Investigation. Per the user's
+// explicit direction (Sept 23, 2026), that's no longer how this should
+// work: a known scam/impersonation match must only be SHOWN as part of
+// the credit-charged QC/DI result, same as the payee's identity already
+// is (see app/verify/qr/page.tsx's Sept 17, 2026 comment on that). The
+// free /api/check-payee route still runs automatically on every scan and
+// still records scan history (payment_payees_seen) even for scans the
+// user never investigates — only the DISPLAY of a match moved behind the
+// paid flow. This function is what verify-payee/deep-payee call, fresh,
+// on every request (cache-independent — scan history can change between
+// requests, so this is never read from the cached verdict result).
+export async function findSimilarPayee(
+  admin: { from: (table: string) => any },
+  userId: string,
+  upiId: string,
+  payeeName: string
+): Promise<PayeeSimilarMatch | null> {
+  if (!payeeName) return null;
+  const normalizedUpiId = upiId.trim().toLowerCase();
+
+  const { data: history, error } = await admin
+    .from("payment_payees_seen")
+    .select("upi_id, payee_name, first_seen_at")
+    .eq("user_id", userId);
+
+  if (error || !history) return null;
+
+  let best: PayeeSimilarMatch | null = null;
+  for (const row of history) {
+    if (row.upi_id === normalizedUpiId || !row.payee_name) continue;
+    const score = nameSimilarity(payeeName, row.payee_name);
+    if (score >= SIMILARITY_THRESHOLD && (!best || score > best.similarity)) {
+      best = { payeeName: row.payee_name, upiId: row.upi_id, similarity: score, firstSeenAt: row.first_seen_at };
+    }
+  }
+  return best;
+}

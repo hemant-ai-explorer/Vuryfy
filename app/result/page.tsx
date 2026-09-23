@@ -59,6 +59,15 @@ type Result = {
   // `payee` carries the name/UPI ID being displayed; `verdict` (below)
   // still decides whether the dedicated Scam alert shows.
   payee?: { name: string | null; upiId: string } | null;
+  // Impersonation/look-alike warning (Sept 23, 2026 — see lib/payee-
+  // similarity.ts's header): only ever present on a payee_reputation
+  // result, i.e. only after the user has spent a credit on Quick Check or
+  // Deep Investigation for this payee. Previously surfaced for free,
+  // immediately on QR decode, before QC/DI was chosen — moved here per
+  // explicit direction so nothing about a payee (identity, scam status,
+  // or a known-impersonation match) is shown without a credit being
+  // charged for it.
+  similarMatch?: { payeeName: string; upiId: string; similarity: number; firstSeenAt: string } | null;
   // Second verdict block (added for audio's combined Quick Check/Deep
   // Investigation, Sept 14, 2026 — see app/api/verify-audio-combined/
   // route.ts): when a single button press runs two independent pipelines
@@ -352,6 +361,16 @@ function ResultView() {
             <h3>{r.payee?.name || t("payee.unnamed")}</h3>
             {r.payee?.upiId && <p className="payee-id">{r.payee.upiId}</p>}
           </div>
+          {r.similarMatch && (
+            <div className="scam-warning" style={{ marginBottom: 20 }}>
+              <span>{t("qr.similarNameWarning")}</span>
+              <p className="caution">
+                {t("qr.similarNameCaution")
+                  .replace("{name}", r.similarMatch.payeeName)
+                  .replace("{id}", r.similarMatch.upiId)}
+              </p>
+            </div>
+          )}
           {isScam ? (
             <div className="scam-warning">
               <span>{t("result.scamWarning")}</span>
