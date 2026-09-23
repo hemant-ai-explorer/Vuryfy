@@ -241,6 +241,14 @@ const en: Dictionary = {
   // evidence, caveats still render in full either way).
   "result.payeeBadge": "PAYEE",
   "result.payeeClear": "No public scam reports found for this payee.",
+  // Sept 23, 2026: rendered by app/result/page.tsx only when
+  // r.registeredIdentity?.available is true — i.e. only once a real VPA-
+  // verification provider is wired into lib/vpa-registered-name.ts. Until
+  // then this key exists but is never shown, since the stub always
+  // reports unavailable.
+  "result.registeredNameLabel": "Registered to: ",
+  "result.registeredNameMismatch":
+    "This doesn't match the name shown on the QR code — verify directly with who you intend to pay before proceeding.",
   "result.receiptEyebrow": "PAYMENT RECEIPT",
   "result.receiptBadge": "THIS LOOKS LIKE A PAYMENT RECEIPT",
   "result.receiptAmountUnclear": "Amount not clearly readable",
@@ -286,6 +294,16 @@ const en: Dictionary = {
   "qr.similarNameCaution": "This name is very close to {name} (ID: {id}), which you've scanned before in Vuryfy — but this QR code uses a different payment ID. This is a common impersonation pattern. Vuryfy can't tell you which of the two is the real one — verify directly with who you intend to pay before proceeding.",
   "qr.paymentCaution": "Vuryfy can't verify who actually controls a payment ID from a QR code alone — that isn't something a web search can confirm. Before paying, make sure the name above matches who you intend to pay, and confirm directly with them if you're unsure.",
   "qr.investigateHint": "This searches the public web for the payee's name and ID — scam reports, complaints, or a legitimate business presence. It still can't confirm this transaction or who controls the ID; it can only tell you what's publicly findable, which may be nothing either way.",
+  // Sept 23, 2026: the three-way choice for a UPI payee investigation —
+  // plain Quick Check, Quick Check + the real bank-verified registered
+  // name (2 credits), or Deep Investigation (which always includes the
+  // registered name at no extra cost). See app/api/verify-payee/route.ts's
+  // header for the cost rationale behind the 2-credit opt-in. English-only
+  // for now, same as this codebase's other small recent UI additions —
+  // known i18n gap, not yet translated into the other 8 languages.
+  "qr.includeRegisteredName": "Also show who this is actually registered to (+1 credit)",
+  "qr.quickCheckWithNameLabel": "Quick Check — 2 credits",
+  "qr.deepIncludesNameHint": "Deep Investigation always includes the verified registered name, at no extra cost.",
   // Sept 17, 2026: shown for a non-UPI payment link (paypal.me, etc. — no
   // payee name/ID to investigate), on the pre-choice screen that now
   // deliberately withholds identity until after Quick Check/Deep
@@ -475,6 +493,9 @@ const hi: Dictionary = {
     "यह इस प्राप्तकर्ता के बारे में रिपोर्ट के लिए सार्वजनिक वेब पर खोज करता है — यह पुष्टि नहीं कर सकता कि पेमेंट ID पर वास्तव में किसका नियंत्रण है, और कुछ न मिलने का मतलब यह नहीं कि वे वैध हैं। ज़्यादातर असली व्यवसायों और ज़्यादातर धोखेबाज़ों, दोनों का अक्सर वेब पर बहुत कम या कोई खोजने योग्य निशान नहीं होता।",
   "result.payeeBadge": "प्राप्तकर्ता",
   "result.payeeClear": "इस प्राप्तकर्ता के लिए कोई सार्वजनिक धोखाधड़ी रिपोर्ट नहीं मिली।",
+  "result.registeredNameLabel": "पंजीकृत नाम: ",
+  "result.registeredNameMismatch":
+    "यह QR कोड पर दिखाए गए नाम से मेल नहीं खाता — आगे बढ़ने से पहले जिसे आप भुगतान करना चाहते हैं, उससे सीधे पुष्टि करें।",
   "result.receiptEyebrow": "भुगतान रसीद",
   "result.receiptBadge": "यह एक भुगतान रसीद लगती है",
   "result.receiptAmountUnclear": "राशि स्पष्ट रूप से पढ़ी नहीं जा सकी",
