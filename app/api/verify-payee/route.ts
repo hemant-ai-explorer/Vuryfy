@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runQuickCheck, normalizeClaim, ENGINE_VERSION, type QuickCheckResult } from "@/lib/quick-check";
+import { findSimilarPayee } from "@/lib/payee-similarity";
 import { getUserLanguage } from "@/lib/user-language";
 import { translate } from "@/lib/translations";
 import {
@@ -177,6 +178,13 @@ export async function POST(request: Request) {
     }
   }
 
+  // Sept 23, 2026: the impersonation/look-alike warning now surfaces only
+  // here — as part of the credit-charged result — never on the free
+  // pre-choice payment card. See lib/payee-similarity.ts's header for the
+  // full rationale. Computed fresh every request, independent of the
+  // verdict cache above, since scan history can change between requests.
+  const similarMatch = await findSimilarPayee(admin, user.id, upiId, payeeName);
+
   const caveats = [translate(language, "payee.disclaimer")];
 
   const { data: verification, error: insertError } = await admin
@@ -267,6 +275,7 @@ export async function POST(request: Request) {
     // are all still returned unchanged below for that rendering to use.
     type: "payee_reputation",
     payee: { name: payeeName || null, upiId },
+    similarMatch,
     claim: verification.claim_text,
     verdict: verification.verdict,
     confidence: verification.confidence,
