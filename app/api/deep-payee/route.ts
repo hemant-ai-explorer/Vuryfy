@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { runDeepInvestigation, DEEP_ENGINE_VERSION, type DeepInvestigationResult } from "@/lib/deep-investigation";
 import { normalizeClaim } from "@/lib/quick-check";
 import { findSimilarPayee } from "@/lib/payee-similarity";
+import { verifyRegisteredName } from "@/lib/vpa-registered-name";
 import { getUserLanguage } from "@/lib/user-language";
 import { translate } from "@/lib/translations";
 import {
@@ -161,6 +162,17 @@ export async function POST(request: Request) {
   // credit-charged result, never on the free pre-choice payment card.
   const similarMatch = await findSimilarPayee(admin, user.id, upiId, payeeName);
 
+  // Sept 23, 2026: unlike the Quick Check version (app/api/verify-payee/
+  // route.ts), this is unconditional — Deep Investigation bundles the real
+  // registered-name lookup in automatically, at no extra credit cost. This
+  // is a deliberate, permanent part of the cost design, not a placeholder:
+  // DI's allowance is small enough (2/month Starter, 5/month Power) that
+  // even a worst-case user running every DI on a payee costs well under
+  // ₹10/month at ~₹1.70/lookup, so it doesn't need the same 2-credit
+  // gating Quick Check needs. See lib/vpa-registered-name.ts's header and
+  // app/api/verify-payee/route.ts's header for the full rationale.
+  const registeredIdentity = await verifyRegisteredName(upiId, payeeName);
+
   const caveats = [translate(language, "payee.disclaimer"), ...(result.caveats ?? [])];
 
   const { data: verification, error: insertError } = await admin
@@ -246,6 +258,7 @@ export async function POST(request: Request) {
     type: "payee_reputation",
     payee: { name: payeeName || null, upiId },
     similarMatch,
+    registeredIdentity,
     claim: verification.claim_text,
     verdict: verification.verdict,
     confidence: verification.confidence,
