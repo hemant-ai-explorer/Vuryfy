@@ -303,9 +303,14 @@ const en: Dictionary = {
   // qr.deepIncludesNameHint) stating exactly what that option shows,
   // replacing an earlier single lead-in sentence. See
   // app/api/verify-payee/route.ts's header for the cost rationale behind
-  // the 2-credit option. English-only for now, same as this codebase's
-  // other small recent UI additions — known i18n gap, not yet translated
-  // into the other 8 languages.
+  // the 2-credit option. Shipped English-only, then translated into Hindi
+  // the same day after a user report that the QC+Registered-Name button
+  // and its caption stayed in English under the Hindi UI — see this same
+  // key set in the `hi` section below. The other 7 launch languages
+  // (kn/ml/ta/te/gu/bn/mr, each in its own translations-<code>.ts file)
+  // still fall back to English for these 4 keys — same known-gap
+  // convention as this codebase's other small recent UI additions, not
+  // yet closed for those.
   "qr.quickCheckCaption": "Shows the payee name",
   "qr.quickCheckWithNameCaption": "Shows the payee name + who it's actually registered to",
   "qr.quickCheckWithNameLabel": "Quick Check + Registered Name — 2 credits",
@@ -544,6 +549,13 @@ const hi: Dictionary = {
   "qr.similarNameCaution": "यह नाम {name} (ID: {id}) से काफी मिलता-जुलता है, जिसे आपने पहले वुर्यफाई में स्कैन किया था — लेकिन इस QR कोड का भुगतान ID अलग है। यह एक आम प्रतिरूपण पैटर्न है। वुर्यफाई यह नहीं बता सकता कि इनमें से कौन-सा असली है — भुगतान करने से पहले जिसे आप भुगतान करना चाहते हैं, उससे सीधे पुष्टि करें।",
   "qr.paymentCaution": "वुर्यफाई यह पुष्टि नहीं कर सकता कि QR कोड से भुगतान ID को वाकई कौन नियंत्रित करता है — यह कोई वेब सर्च से पता नहीं चलता। भुगतान करने से पहले सुनिश्चित करें कि ऊपर दिया गया नाम उस व्यक्ति से मेल खाता है जिसे आप भुगतान करना चाहते हैं, और अगर अनिश्चित हों तो सीधे उनसे पुष्टि करें।",
   "qr.investigateHint": "यह प्राप्तकर्ता के नाम और ID के लिए सार्वजनिक वेब पर खोज करता है — धोखाधड़ी की रिपोर्ट, शिकायतें, या किसी वैध व्यवसाय की मौजूदगी। यह अब भी इस लेन-देन या यह ID किसे नियंत्रित करता है, इसकी पुष्टि नहीं कर सकता; यह केवल वही बता सकता है जो सार्वजनिक रूप से मिल सकता है, जो दोनों ही तरह से कुछ न भी हो सकता है।",
+  // Sept 23, 2026: closes the i18n gap flagged right after these keys
+  // shipped English-only — see lib/translations.ts's English `en` section
+  // for the identical comment and the full feature rationale.
+  "qr.quickCheckCaption": "प्राप्तकर्ता का नाम दिखाता है",
+  "qr.quickCheckWithNameCaption": "प्राप्तकर्ता का नाम + यह वास्तव में किसके नाम पर पंजीकृत है, दिखाता है",
+  "qr.quickCheckWithNameLabel": "क्विक चेक + पंजीकृत नाम — 2 क्रेडिट",
+  "qr.deepIncludesNameHint": "डीप इन्वेस्टिगेशन में हमेशा सत्यापित पंजीकृत नाम शामिल होता है, बिना किसी अतिरिक्त शुल्क के।",
   "qr.paymentLinkHint": "यह एक भुगतान लिंक है। वुर्यफाई यह पुष्टि नहीं कर सकता कि इसे कौन नियंत्रित करता है, और न ही इसकी आगे जांच कर सकता है — आगे बढ़ने से पहले जिसे आप भुगतान करना चाहते हैं, उससे सीधे पुष्टि करें।",
   "qr.scanAnother": "दूसरा स्कैन करें",
   "qr.decodedBadge": "हमें आपके QR कोड में यह मिला",
