@@ -23,7 +23,7 @@
 .payee-actions{align-items:flex-start}
 .payee-action{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}
 .payee-action button{width:100%}
-.payee-action p.hint{margin-top:0;font-size:13px}
+.payee-action p.hint{margin-top:0;font-size:13px;text-align:center}
 @media(max-width:600px){.payee-actions{flex-direction:column}.payee-action{width:100%}}
 .qr-payment h3{font-size:24px;letter-spacing:-.02em;margin:10px 0 4px}
 .qr-payment .payee-id{font-size:14px;color:#6d747c;word-break:break-word;margin:0 0 4px}
