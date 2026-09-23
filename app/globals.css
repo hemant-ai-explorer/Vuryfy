@@ -20,8 +20,6 @@
 .qr-decoded p{font-size:18px;line-height:1.6;margin:10px 0;word-break:break-word}
 .qr-payment{border-top:1px solid #e5e7ea;margin-top:36px;padding-top:20px}
 .qr-payment span{font-size:11px;font-weight:700;letter-spacing:.14em;color:#747a81}
-.checkbox-hint{display:flex;align-items:center;gap:8px;font-size:13px;color:#6d747c;margin-top:16px;cursor:pointer}
-.checkbox-hint input{margin:0}
 .qr-payment h3{font-size:24px;letter-spacing:-.02em;margin:10px 0 4px}
 .qr-payment .payee-id{font-size:14px;color:#6d747c;word-break:break-word;margin:0 0 4px}
 .qr-payment .caution{font-size:14px;line-height:1.55;color:#575d64;background:#fff;border:1px solid #e5e7ea;border-radius:14px;padding:16px 18px;margin:20px 0 0}

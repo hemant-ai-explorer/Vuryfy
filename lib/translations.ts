@@ -295,14 +295,14 @@ const en: Dictionary = {
   "qr.paymentCaution": "Vuryfy can't verify who actually controls a payment ID from a QR code alone — that isn't something a web search can confirm. Before paying, make sure the name above matches who you intend to pay, and confirm directly with them if you're unsure.",
   "qr.investigateHint": "This searches the public web for the payee's name and ID — scam reports, complaints, or a legitimate business presence. It still can't confirm this transaction or who controls the ID; it can only tell you what's publicly findable, which may be nothing either way.",
   // Sept 23, 2026: the three-way choice for a UPI payee investigation —
-  // plain Quick Check, Quick Check + the real bank-verified registered
-  // name (2 credits), or Deep Investigation (which always includes the
-  // registered name at no extra cost). See app/api/verify-payee/route.ts's
-  // header for the cost rationale behind the 2-credit opt-in. English-only
-  // for now, same as this codebase's other small recent UI additions —
-  // known i18n gap, not yet translated into the other 8 languages.
-  "qr.includeRegisteredName": "Also show who this is actually registered to (+1 credit)",
-  "qr.quickCheckWithNameLabel": "Quick Check — 2 credits",
+  // plain Quick Check, Quick Check + Registered Name (its own button, 2
+  // credits), or Deep Investigation (which always includes the registered
+  // name at no extra cost). See app/api/verify-payee/route.ts's header for
+  // the cost rationale behind the 2-credit option. English-only for now,
+  // same as this codebase's other small recent UI additions — known i18n
+  // gap, not yet translated into the other 8 languages.
+  "qr.includeRegisteredName": "Want to know who this is actually registered to? Choose one of the options below.",
+  "qr.quickCheckWithNameLabel": "Quick Check + Registered Name — 2 credits",
   "qr.deepIncludesNameHint": "Deep Investigation always includes the verified registered name, at no extra cost.",
   // Sept 17, 2026: shown for a non-UPI payment link (paypal.me, etc. — no
   // payee name/ID to investigate), on the pre-choice screen that now

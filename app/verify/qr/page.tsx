@@ -83,13 +83,14 @@ export default function VerifyQrPage() {
   const [decodeError, setDecodeError] = useState("");
   const [submitting, setSubmitting] = useState<"quick" | "deep" | null>(null);
   const [submitError, setSubmitError] = useState("");
-  const [payeeChecking, setPayeeChecking] = useState<"quick" | "deep" | null>(null);
+  // Sept 23, 2026: "quick-name" is a third, distinct loading state — the
+  // real bank-verified registered-name lookup on a Quick Check is its own
+  // button now (not a checkbox modifying the plain Quick Check button —
+  // see app/api/verify-payee/route.ts's header for the 2-credit cost
+  // rationale). Deep Investigation always includes the lookup for free, so
+  // it doesn't need a variant.
+  const [payeeChecking, setPayeeChecking] = useState<"quick" | "quick-name" | "deep" | null>(null);
   const [payeeCheckError, setPayeeCheckError] = useState("");
-  // Sept 23, 2026: opt-in for the real bank-verified registered-name
-  // lookup on a Quick Check — see app/api/verify-payee/route.ts's header
-  // for the 2-credit cost rationale. Deep Investigation always includes
-  // this for free, so there's nothing to opt into there.
-  const [includeRegisteredName, setIncludeRegisteredName] = useState(false);
   // Sept 20, 2026: "still working" progress indicators for both Deep
   // Investigation buttons on this screen — see lib/use-elapsed-seconds.ts.
   const deepElapsed = useElapsedSeconds(submitting === "deep");
@@ -168,9 +169,13 @@ export default function VerifyQrPage() {
     }
   }
 
-  async function investigatePayee(mode: "quick" | "deep") {
+  // Sept 23, 2026: withRegisteredName is only meaningful for mode "quick"
+  // (it's what the "Quick Check + Registered Name" button passes) —
+  // /api/deep-payee always includes the lookup regardless of this flag, so
+  // the Deep Investigation button never needs to pass it.
+  async function investigatePayee(mode: "quick" | "deep", withRegisteredName = false) {
     if (!paymentInfo?.payeeId) return;
-    setPayeeChecking(mode);
+    setPayeeChecking(mode === "quick" && withRegisteredName ? "quick-name" : mode);
     setPayeeCheckError("");
     try {
       const endpoint = mode === "quick" ? "/api/verify-payee" : "/api/deep-payee";
@@ -180,9 +185,7 @@ export default function VerifyQrPage() {
         body: JSON.stringify({
           payee_name: paymentInfo.payeeName ?? "",
           upi_id: paymentInfo.payeeId,
-          // Only meaningful to /api/verify-payee — /api/deep-payee always
-          // includes the registered-name lookup regardless of this flag.
-          include_registered_name: mode === "quick" ? includeRegisteredName : undefined,
+          include_registered_name: mode === "quick" ? withRegisteredName : undefined,
         }),
       });
       const d = await parseJsonResponse(r);
@@ -202,7 +205,6 @@ export default function VerifyQrPage() {
     setDecodeError("");
     setSubmitError("");
     setPayeeCheckError("");
-    setIncludeRegisteredName(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -266,21 +268,15 @@ export default function VerifyQrPage() {
             {paymentInfo.kind === "upi" && paymentInfo.payeeId ? (
               <div className="qr-decoded">
                 <p className="hint">{t("qr.investigateHint")}</p>
-                {/* Sept 23, 2026: the real bank-verified registered-name
-                    lookup — Deep Investigation always includes it for
-                    free (see the hint below the buttons); Quick Check
-                    only includes it when this box is checked, at 2
-                    credits instead of 1. See app/api/verify-payee/
-                    route.ts's header for the cost rationale. */}
-                <label className="checkbox-hint">
-                  <input
-                    type="checkbox"
-                    checked={includeRegisteredName}
-                    onChange={(e) => setIncludeRegisteredName(e.target.checked)}
-                    disabled={!!payeeChecking}
-                  />
-                  {t("qr.includeRegisteredName")}
-                </label>
+                {/* Sept 23, 2026: three distinct buttons rather than a
+                    checkbox modifying Quick Check — the real bank-verified
+                    registered-name lookup gets its own explicit button at
+                    its own 2-credit price, separate from plain Quick
+                    Check. Deep Investigation always includes it for free
+                    (see the hint below the buttons). See
+                    app/api/verify-payee/route.ts's header for the cost
+                    rationale. */}
+                <p className="hint">{t("qr.includeRegisteredName")}</p>
                 <div className="result-actions">
                   <button
                     className="secondary"
@@ -291,12 +287,15 @@ export default function VerifyQrPage() {
                       ? `${t("claim.investigating")} (${payeeDeepElapsed}s)`
                       : t("claim.deepInvestigation")}
                   </button>
+                  <button
+                    className="secondary"
+                    onClick={() => investigatePayee("quick", true)}
+                    disabled={!!payeeChecking}
+                  >
+                    {payeeChecking === "quick-name" ? t("claim.checking") : t("qr.quickCheckWithNameLabel")}
+                  </button>
                   <button onClick={() => investigatePayee("quick")} disabled={!!payeeChecking}>
-                    {payeeChecking === "quick"
-                      ? t("claim.checking")
-                      : includeRegisteredName
-                        ? t("qr.quickCheckWithNameLabel")
-                        : t("claim.quickCheck")}
+                    {payeeChecking === "quick" ? t("claim.checking") : t("claim.quickCheck")}
                   </button>
                 </div>
                 <p className="hint">{t("qr.deepIncludesNameHint")}</p>
