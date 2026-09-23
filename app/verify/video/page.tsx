@@ -225,17 +225,22 @@ export default function VerifyVideoPage() {
             />
             <p className="hint">{t("video.transcriptHint")}</p>
             <p className="hint">{t("video.combinedHint")}</p>
+            {/* Sept 23, 2026: Quick Check first, Deep Investigation second,
+                both styled identically (neither uses "secondary") — a
+                standing convention now applied across every feature's
+                QC/DI pair. "Choose Another" moves after them since it
+                isn't part of that pair. */}
             <div className="result-actions">
-              <button className="secondary" onClick={reset} disabled={anySubmitting}>
-                {t("action.chooseAnother")}
+              <button onClick={() => submitCombined("quick")} disabled={anySubmitting}>
+                {submitting === "combined-quick" ? t("claim.checking") : t("claim.quickCheck")}
               </button>
-              <button className="secondary" onClick={() => submitCombined("deep")} disabled={anySubmitting}>
+              <button onClick={() => submitCombined("deep")} disabled={anySubmitting}>
                 {submitting === "combined-deep"
                   ? `${t("claim.investigating")} (${deepElapsed}s)`
                   : t("claim.deepInvestigation")}
               </button>
-              <button onClick={() => submitCombined("quick")} disabled={anySubmitting}>
-                {submitting === "combined-quick" ? t("claim.checking") : t("claim.quickCheck")}
+              <button className="secondary" onClick={reset} disabled={anySubmitting}>
+                {t("action.chooseAnother")}
               </button>
             </div>
             {submitError && <p className="error">{submitError}</p>}
@@ -254,17 +259,20 @@ export default function VerifyVideoPage() {
               placeholder={t("video.contextPlaceholder")}
               maxLength={500}
             />
+            {/* Sept 23, 2026: Quick Check first, Deep Investigation second,
+                both styled identically — see the identical comment above
+                on the combined-transcript block. */}
             <div className="result-actions">
-              <button className="secondary" onClick={reset} disabled={anySubmitting}>
-                {t("action.chooseAnother")}
+              <button onClick={() => submitVideo("quick")} disabled={anySubmitting}>
+                {submitting === "video-quick" ? t("claim.checking") : t("claim.quickCheck")}
               </button>
-              <button className="secondary" onClick={() => submitVideo("deep")} disabled={anySubmitting}>
+              <button onClick={() => submitVideo("deep")} disabled={anySubmitting}>
                 {submitting === "video-deep"
                   ? `${t("claim.investigating")} (${deepElapsed}s)`
                   : t("claim.deepInvestigation")}
               </button>
-              <button onClick={() => submitVideo("quick")} disabled={anySubmitting}>
-                {submitting === "video-quick" ? t("claim.checking") : t("claim.quickCheck")}
+              <button className="secondary" onClick={reset} disabled={anySubmitting}>
+                {t("action.chooseAnother")}
               </button>
             </div>
             {submitError && <p className="error">{submitError}</p>}

@@ -68,6 +68,15 @@ type Result = {
   // or a known-impersonation match) is shown without a credit being
   // charged for it.
   similarMatch?: { payeeName: string; upiId: string; similarity: number; firstSeenAt: string } | null;
+  // Real VPA-registered-name check (Sept 23, 2026 — see lib/vpa-
+  // registered-name.ts's header): currently always { available: false }
+  // since no provider is wired in yet, so the block below renders nothing
+  // today. Left in place, gated on `available`, so wiring in a real
+  // provider later needs no further change here.
+  registeredIdentity?:
+    | { available: false }
+    | { available: true; registeredName: string; matchesClaimedName: boolean }
+    | null;
   // Second verdict block (added for audio's combined Quick Check/Deep
   // Investigation, Sept 14, 2026 — see app/api/verify-audio-combined/
   // route.ts): when a single button press runs two independent pipelines
@@ -295,16 +304,16 @@ function ResultView() {
             <div className="qr-decoded" style={{ marginTop: 20 }}>
               <span>{t("payee.investigateEyebrow")}</span>
               <p className="hint">{t("result.investigateHint")}</p>
+              {/* Sept 23, 2026: Quick Check first, Deep Investigation
+                  second, both styled identically (neither uses
+                  "secondary") — a standing convention now applied across
+                  every feature's QC/DI pair. */}
               <div className="result-actions">
-                <button
-                  className="secondary"
-                  onClick={() => investigatePayee("deep")}
-                  disabled={!!payeeChecking}
-                >
-                  {payeeChecking === "deep" ? t("claim.investigating") : t("claim.deepInvestigation")}
-                </button>
                 <button onClick={() => investigatePayee("quick")} disabled={!!payeeChecking}>
                   {payeeChecking === "quick" ? t("claim.checking") : t("claim.quickCheck")}
+                </button>
+                <button onClick={() => investigatePayee("deep")} disabled={!!payeeChecking}>
+                  {payeeChecking === "deep" ? t("claim.investigating") : t("claim.deepInvestigation")}
                 </button>
               </div>
               {payeeCheckError && <p className="error">{payeeCheckError}</p>}
@@ -369,6 +378,24 @@ function ResultView() {
                   .replace("{name}", r.similarMatch.payeeName)
                   .replace("{id}", r.similarMatch.upiId)}
               </p>
+            </div>
+          )}
+          {r.registeredIdentity?.available && (
+            <div
+              className={r.registeredIdentity.matchesClaimedName ? "hint" : "scam-warning"}
+              style={{ marginBottom: 20 }}
+            >
+              {r.registeredIdentity.matchesClaimedName ? (
+                <p>
+                  {t("result.registeredNameLabel")}
+                  {r.registeredIdentity.registeredName}
+                </p>
+              ) : (
+                <>
+                  <span>{t("result.registeredNameLabel")}{r.registeredIdentity.registeredName}</span>
+                  <p className="caution">{t("result.registeredNameMismatch")}</p>
+                </>
+              )}
             </div>
           )}
           {isScam ? (
