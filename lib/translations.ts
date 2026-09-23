@@ -297,11 +297,17 @@ const en: Dictionary = {
   // Sept 23, 2026: the three-way choice for a UPI payee investigation —
   // plain Quick Check, Quick Check + Registered Name (its own button, 2
   // credits), or Deep Investigation (which always includes the registered
-  // name at no extra cost). See app/api/verify-payee/route.ts's header for
-  // the cost rationale behind the 2-credit option. English-only for now,
-  // same as this codebase's other small recent UI additions — known i18n
-  // gap, not yet translated into the other 8 languages.
-  "qr.includeRegisteredName": "Want to know who this is actually registered to? Choose one of the options below.",
+  // name at no extra cost). Each of the three buttons on
+  // app/verify/qr/page.tsx now carries its own one-line caption
+  // (qr.quickCheckCaption / qr.quickCheckWithNameCaption /
+  // qr.deepIncludesNameHint) stating exactly what that option shows,
+  // replacing an earlier single lead-in sentence. See
+  // app/api/verify-payee/route.ts's header for the cost rationale behind
+  // the 2-credit option. English-only for now, same as this codebase's
+  // other small recent UI additions — known i18n gap, not yet translated
+  // into the other 8 languages.
+  "qr.quickCheckCaption": "Shows the payee name",
+  "qr.quickCheckWithNameCaption": "Shows the payee name + who it's actually registered to",
   "qr.quickCheckWithNameLabel": "Quick Check + Registered Name — 2 credits",
   "qr.deepIncludesNameHint": "Deep Investigation always includes the verified registered name, at no extra cost.",
   // Sept 17, 2026: shown for a non-UPI payment link (paypal.me, etc. — no

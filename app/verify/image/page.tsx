@@ -252,22 +252,26 @@ function ImageForm() {
               placeholder={t("image.contextPlaceholder")}
               maxLength={500}
             />
+            {/* Sept 23, 2026: Quick Check first, Deep Investigation second,
+                both styled identically (neither uses "secondary") — a
+                standing convention now applied across every feature's
+                QC/DI pair. "Choose Another" moves after them since it
+                isn't part of that pair. */}
             <div className="result-actions">
-              <button className="secondary" onClick={reset} disabled={anySubmitting}>
-                {t("action.chooseAnother")}
-              </button>
-              <button
-                className="secondary"
-                onClick={() => (ocrText ? submitCombined("deep") : submitVision("deep"))}
-                disabled={anySubmitting}
-              >
-                {isDeepCombined ? `${t("claim.investigating")} (${deepElapsed}s)` : t("claim.deepInvestigation")}
-              </button>
               <button
                 onClick={() => (ocrText ? submitCombined("quick") : submitVision("quick"))}
                 disabled={anySubmitting}
               >
                 {isCheckingCombined ? t("claim.checking") : t("claim.quickCheck")}
+              </button>
+              <button
+                onClick={() => (ocrText ? submitCombined("deep") : submitVision("deep"))}
+                disabled={anySubmitting}
+              >
+                {isDeepCombined ? `${t("claim.investigating")} (${deepElapsed}s)` : t("claim.deepInvestigation")}
+              </button>
+              <button className="secondary" onClick={reset} disabled={anySubmitting}>
+                {t("action.chooseAnother")}
               </button>
             </div>
             {submitError && <p className="error">{submitError}</p>}

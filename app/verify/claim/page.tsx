@@ -165,16 +165,17 @@ function ClaimForm() {
         {claim.trim().length > 0 && claim.trim().length < 5 && !submitting && (
           <p className="hint">{t("claim.minLengthHint")}</p>
         )}
+        {/* Sept 23, 2026: Quick Check first, Deep Investigation second, both
+            styled identically (neither uses "secondary") — a standing
+            convention now applied across every feature's QC/DI pair (see
+            this same change in verify/image, verify/video, verify/audio,
+            verify/qr, and result/page.tsx's payment_request block). */}
         <div className="result-actions">
-          <button
-            className="secondary"
-            onClick={() => submit("deep")}
-            disabled={!!submitting || claim.trim().length < 5}
-          >
-            {submitting === "deep" ? `${t("claim.investigating")} (${deepElapsed}s)` : t("claim.deepInvestigation")}
-          </button>
           <button onClick={() => submit("quick")} disabled={!!submitting || claim.trim().length < 5}>
             {submitting === "quick" ? t("claim.checking") : t("claim.quickCheck")}
+          </button>
+          <button onClick={() => submit("deep")} disabled={!!submitting || claim.trim().length < 5}>
+            {submitting === "deep" ? `${t("claim.investigating")} (${deepElapsed}s)` : t("claim.deepInvestigation")}
           </button>
         </div>
         {error && <p className="error">{error}</p>}

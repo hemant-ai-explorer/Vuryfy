@@ -268,37 +268,42 @@ export default function VerifyQrPage() {
             {paymentInfo.kind === "upi" && paymentInfo.payeeId ? (
               <div className="qr-decoded">
                 <p className="hint">{t("qr.investigateHint")}</p>
-                {/* Sept 23, 2026: three distinct buttons rather than a
-                    checkbox modifying Quick Check — the real bank-verified
-                    registered-name lookup gets its own explicit button at
-                    its own 2-credit price, separate from plain Quick
-                    Check. Deep Investigation always includes it for free
-                    (see the hint below the buttons). See
-                    app/api/verify-payee/route.ts's header for the cost
-                    rationale. */}
-                <p className="hint">{t("qr.includeRegisteredName")}</p>
-                <div className="result-actions">
-                  <button
-                    className="secondary"
-                    onClick={() => investigatePayee("deep")}
-                    disabled={!!payeeChecking}
-                  >
-                    {payeeChecking === "deep"
-                      ? `${t("claim.investigating")} (${payeeDeepElapsed}s)`
-                      : t("claim.deepInvestigation")}
-                  </button>
-                  <button
-                    className="secondary"
-                    onClick={() => investigatePayee("quick", true)}
-                    disabled={!!payeeChecking}
-                  >
-                    {payeeChecking === "quick-name" ? t("claim.checking") : t("qr.quickCheckWithNameLabel")}
-                  </button>
-                  <button onClick={() => investigatePayee("quick")} disabled={!!payeeChecking}>
-                    {payeeChecking === "quick" ? t("claim.checking") : t("claim.quickCheck")}
-                  </button>
+                {/* Sept 23, 2026: three distinct buttons, QC → QC+Registered
+                    Name → DI, each with its own caption underneath stating
+                    exactly what that option shows — replaces the earlier
+                    single lead-in sentence (removed) and checkbox (removed
+                    before that). All three are styled identically (none use
+                    "secondary") since they're three equally-weighted paid
+                    options here, unlike the plain claim confirm screen
+                    where Quick Check is the default action and Deep
+                    Investigation/Scan another are visually secondary. The
+                    real bank-verified registered-name lookup is its own
+                    button at its own 2-credit price, separate from plain
+                    Quick Check; Deep Investigation always includes it for
+                    free. See app/api/verify-payee/route.ts's header for the
+                    cost rationale. */}
+                <div className="result-actions payee-actions">
+                  <div className="payee-action">
+                    <button onClick={() => investigatePayee("quick")} disabled={!!payeeChecking}>
+                      {payeeChecking === "quick" ? t("claim.checking") : t("claim.quickCheck")}
+                    </button>
+                    <p className="hint">{t("qr.quickCheckCaption")}</p>
+                  </div>
+                  <div className="payee-action">
+                    <button onClick={() => investigatePayee("quick", true)} disabled={!!payeeChecking}>
+                      {payeeChecking === "quick-name" ? t("claim.checking") : t("qr.quickCheckWithNameLabel")}
+                    </button>
+                    <p className="hint">{t("qr.quickCheckWithNameCaption")}</p>
+                  </div>
+                  <div className="payee-action">
+                    <button onClick={() => investigatePayee("deep")} disabled={!!payeeChecking}>
+                      {payeeChecking === "deep"
+                        ? `${t("claim.investigating")} (${payeeDeepElapsed}s)`
+                        : t("claim.deepInvestigation")}
+                    </button>
+                    <p className="hint">{t("qr.deepIncludesNameHint")}</p>
+                  </div>
                 </div>
-                <p className="hint">{t("qr.deepIncludesNameHint")}</p>
                 {payeeCheckError && <p className="error">{payeeCheckError}</p>}
               </div>
             ) : (
@@ -321,15 +326,20 @@ export default function VerifyQrPage() {
             <span>{t("qr.decodedBadge")}</span>
             <p>{decoded}</p>
             <p className="hint">{t("qr.decodedHint")}</p>
+            {/* Sept 23, 2026: Quick Check first, Deep Investigation second,
+                both styled identically (neither uses "secondary") — a
+                standing convention now applied across every feature's
+                QC/DI pair. "Scan another" moves after them since it isn't
+                part of that pair. */}
             <div className="result-actions">
-              <button className="secondary" onClick={reset} disabled={!!submitting}>
-                {t("qr.scanAnother")}
-              </button>
-              <button className="secondary" onClick={() => confirm("deep")} disabled={!!submitting}>
-                {submitting === "deep" ? `${t("claim.investigating")} (${deepElapsed}s)` : t("claim.deepInvestigation")}
-              </button>
               <button onClick={() => confirm("quick")} disabled={!!submitting}>
                 {submitting === "quick" ? t("claim.checking") : t("claim.quickCheck")}
+              </button>
+              <button onClick={() => confirm("deep")} disabled={!!submitting}>
+                {submitting === "deep" ? `${t("claim.investigating")} (${deepElapsed}s)` : t("claim.deepInvestigation")}
+              </button>
+              <button className="secondary" onClick={reset} disabled={!!submitting}>
+                {t("qr.scanAnother")}
               </button>
             </div>
             {submitError && <p className="error">{submitError}</p>}
