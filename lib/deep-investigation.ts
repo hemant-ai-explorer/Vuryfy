@@ -87,6 +87,32 @@ const SYNTHESIS_FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-li
 // image-analysis.ts's IMAGE_QUICK_FALLBACK_MODELS for its own cheap-tier call.
 const DECOMPOSE_FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-3.8-flash"];
 
+// Sept 24, 2026: added after diagnosing a real test-vs-prod verdict
+// mismatch on the identical claim (see git history / session notes same
+// day). Both environments' decompose calls got hit by a real Gemini
+// overload spike within minutes of each other; prod's decompose burned
+// through its primary model's retries AND both fallback models' single,
+// no-backoff attempts — all in a few seconds — without ever giving the
+// spike a real chance to clear, and fell all the way back to treating the
+// whole claim as one un-decomposed sub-question. That's a real, if
+// unsatisfying, "two honest runs disagreed" outcome (see
+// SYNTHESIS_SYSTEM_PROMPT's grounding rules — weaker/undirected search
+// evidence from a skipped decomposition step can reasonably shift a
+// verdict), but decompose specifically had the thinnest retry runway of
+// any callStructured() call in the app: 2 retries against primary, then
+// each fallback got exactly one immediate attempt. Widening that runway a
+// little — one more retry against primary, and one backed-off retry per
+// fallback — costs at most a few extra seconds, only ever spent on the
+// unhappy path (a clean first attempt is completely unaffected), and is
+// safely bounded either way by the shared deadlineAt budget this call
+// already respects (see ai-gateway.ts's DEEP_INVESTIGATION_BUDGET_MS):
+// widening the runway can never push the pipeline past its 45s ceiling,
+// it can only make decompose use more of its fair share of that budget
+// before giving up and falling back to single-question mode, same as
+// before.
+const DECOMPOSE_RETRY_DELAYS_MS = [500, 1500, 3000]; // one more retry than the app-wide default
+const DECOMPOSE_FALLBACK_RETRY_DELAYS_MS = [800]; // one backed-off retry per fallback model, not just one bare attempt
+
 export interface DeepInvestigationResult {
   verdict: string;
   confidence: number;
@@ -203,6 +229,8 @@ export async function runDeepInvestigation(
       userPrompt: `Claim to investigate:\n"${claim}"`,
       responseSchema: DECOMPOSE_SCHEMA,
       fallbackModels: DECOMPOSE_FALLBACK_MODELS,
+      retryDelaysMs: DECOMPOSE_RETRY_DELAYS_MS,
+      fallbackRetryDelaysMs: DECOMPOSE_FALLBACK_RETRY_DELAYS_MS,
       deadlineAt,
       callSite: "deep-investigation.decompose",
     });
