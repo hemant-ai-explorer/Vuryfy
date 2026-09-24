@@ -31,6 +31,23 @@
 -- Note: a separate, not-yet-built "delete my account" plan also expected to
 -- claim migration number 0020 — if that lands after this one, it should
 -- renumber to 0021.
+--
+-- Sept 23, 2026 correction: CREATE OR REPLACE FUNCTION only replaces a
+-- function whose argument list matches EXACTLY — adding p_amount changes
+-- the signature, so the first version of this migration didn't replace
+-- decrement_quick_check(uuid)/refund_quick_check(uuid) at all, it created
+-- a second, overloaded function alongside each original. Two functions
+-- sharing a name confuses PostgREST's RPC resolution (surfaced as a 500 on
+-- every call, including ordinary 1-credit ones from every OTHER caller of
+-- these two functions — verify/route.ts, deep/route.ts, verify-image,
+-- verify-audio, verify-video, and their *-combined variants, subscribe).
+-- The DROPs below remove the original single-argument versions first, so
+-- only the new default-parameter version remains — every existing caller
+-- (which only ever passes p_user_id) keeps working exactly as before via
+-- the default, while verify-payee/route.ts can also pass p_amount: 2.
+
+drop function if exists public.decrement_quick_check(uuid);
+drop function if exists public.refund_quick_check(uuid);
 
 create or replace function public.decrement_quick_check(p_user_id uuid, p_amount integer default 1)
 returns integer
