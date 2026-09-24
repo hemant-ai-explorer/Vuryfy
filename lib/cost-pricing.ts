@@ -4,10 +4,11 @@
 // actually wired up until Sept 16, 2026; see architecture-decisions.md's
 // cost-tracking entry for the full story). Paired with the api_cost_logs
 // table (supabase/migrations/0012_api_cost_logs.sql) and the logging calls
-// in lib/ai-gateway.ts, lib/search-gateway.ts, and lib/embeddings.ts — the
-// three files that between them make every metered external call this app
-// makes (Part 11's "AI/Search Gateway" lock is exactly what makes this a
-// 3-file change instead of touching every route).
+// in lib/ai-gateway.ts, lib/search-gateway.ts, lib/embeddings.ts, and (added
+// Sept 24, 2026) lib/web-detection.ts — the four files that between them
+// make every metered external call this app makes (Part 11's "AI/Search
+// Gateway" lock is exactly what makes this a small, fixed set of files to
+// touch instead of every route).
 //
 // PRICES ARE HARDCODED SNAPSHOTS, confirmed current as of Sept 16, 2026 —
 // not fetched live from any provider. They WILL drift as providers change
@@ -58,6 +59,23 @@ export const GEMINI_PRICING: Record<string, GeminiModelPricing> = {
 
 export const TAVILY_COST_PER_CREDIT_USD = 0.008; // pay-as-you-go rate; volume discounts (~$0.005/credit at high volume) not modeled here
 export const TAVILY_CREDITS_PER_BASIC_SEARCH = 1; // search-gateway.ts always calls Tavily with search_depth: "basic", which is deterministically 1 credit — no need to parse credit usage from the response
+
+// Google Cloud Vision — Web Detection (lib/web-detection.ts, called only
+// from image Deep Investigation). Sept 24, 2026 addition, closing the gap
+// flagged in an earlier cost-instrumentation pull: this provider was never
+// priced or logged at all. Flat per-call rate, not token-based like Gemini
+// or credit-based like Tavily — Google's published standard rate is
+// $3.50 per 1,000 units after the first 1,000 free calls/month (per
+// cloud.google.com/vision/pricing, confirmed Sept 24, 2026). Same
+// simplification the Tavily rate above already makes for its own volume
+// discount: the free tier isn't modeled here, so every call is costed at
+// the standard per-unit rate — slightly overstates true spend while a
+// month's usage is still inside the free tier, exact once past it.
+export const GOOGLE_VISION_WEB_DETECTION_COST_PER_CALL_USD = 0.0035;
+
+export function estimateGoogleVisionCostUsd(calls: number = 1): number {
+  return calls * GOOGLE_VISION_WEB_DETECTION_COST_PER_CALL_USD;
+}
 
 // inputModality distinguishes Gemini's separate (higher) per-token rate for
 // raw audio input on models that price it that way — see audioInputPerMillion
