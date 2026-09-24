@@ -171,7 +171,7 @@ export async function POST(request: Request) {
   // ₹10/month at ~₹1.70/lookup, so it doesn't need the same 2-credit
   // gating Quick Check needs. See lib/vpa-registered-name.ts's header and
   // app/api/verify-payee/route.ts's header for the full rationale.
-  const registeredIdentity = await verifyRegisteredName(upiId, payeeName);
+  const registeredIdentity = await verifyRegisteredName(admin, upiId, payeeName);
 
   const caveats = [translate(language, "payee.disclaimer"), ...(result.caveats ?? [])];
 
