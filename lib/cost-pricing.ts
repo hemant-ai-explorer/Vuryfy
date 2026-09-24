@@ -5,10 +5,10 @@
 // cost-tracking entry for the full story). Paired with the api_cost_logs
 // table (supabase/migrations/0012_api_cost_logs.sql) and the logging calls
 // in lib/ai-gateway.ts, lib/search-gateway.ts, lib/embeddings.ts, and (added
-// Sept 24, 2026) lib/web-detection.ts — the four files that between them
-// make every metered external call this app makes (Part 11's "AI/Search
-// Gateway" lock is exactly what makes this a small, fixed set of files to
-// touch instead of every route).
+// Sept 24, 2026) lib/web-detection.ts and lib/detect-text.ts — the five
+// files that between them make every metered external call this app makes
+// (Part 11's "AI/Search Gateway" lock is exactly what makes this a small,
+// fixed set of files to touch instead of every route).
 //
 // PRICES ARE HARDCODED SNAPSHOTS, confirmed current as of Sept 16, 2026 —
 // not fetched live from any provider. They WILL drift as providers change
@@ -75,6 +75,21 @@ export const GOOGLE_VISION_WEB_DETECTION_COST_PER_CALL_USD = 0.0035;
 
 export function estimateGoogleVisionCostUsd(calls: number = 1): number {
   return calls * GOOGLE_VISION_WEB_DETECTION_COST_PER_CALL_USD;
+}
+
+// Google Cloud Vision — Text Detection (lib/detect-text.ts, added Sept 24,
+// 2026 replacing client-side Tesseract.js OCR — see that file's header for
+// why: 40-50s of in-browser multi-language WASM recognition on every photo
+// versus a ~1-2s server call). DOCUMENT_TEXT_DETECTION is priced separately
+// from WEB_DETECTION above (cheaper: $1.50/1,000 units vs $3.50/1,000,
+// same first-1,000-free-per-month structure, per cloud.google.com/vision/
+// pricing, confirmed Sept 24, 2026). Same free-tier simplification as
+// GOOGLE_VISION_WEB_DETECTION_COST_PER_CALL_USD above: every call is costed
+// at the standard per-unit rate, not modeling the free tier.
+export const GOOGLE_VISION_TEXT_DETECTION_COST_PER_CALL_USD = 0.0015;
+
+export function estimateGoogleVisionTextDetectionCostUsd(calls: number = 1): number {
+  return calls * GOOGLE_VISION_TEXT_DETECTION_COST_PER_CALL_USD;
 }
 
 // inputModality distinguishes Gemini's separate (higher) per-token rate for

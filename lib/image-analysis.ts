@@ -257,12 +257,19 @@ export async function runImageDeepInvestigation(
   imageBase64: string,
   mimeType: string,
   context: string | null,
-  language: Language = "en"
+  language: Language = "en",
+  // Sept 24, 2026 addition — see ai-gateway.ts's DEEP_INVESTIGATION_BUDGET_MS
+  // for the full rationale. Optional; passed through to both the Web
+  // Detection call and the vision reasoning call below, so the two steps
+  // (genuinely sequential — the vision call's prompt needs Web Detection's
+  // output) share one real wall-clock budget instead of each independently
+  // assuming it has the full timeout available.
+  deadlineAt?: number
 ): Promise<ImageAnalysisResult> {
   // Fails open — a missing key or a Vision API error just means no web
   // evidence for this run, not a failed investigation (see
   // lib/web-detection.ts).
-  const webResult = await detectWeb(imageBase64, "image-analysis.deep.web-detection").catch(() => null);
+  const webResult = await detectWeb(imageBase64, "image-analysis.deep.web-detection", deadlineAt).catch(() => null);
   const webPages = webResult?.matchingPages ?? [];
 
   const { data } = await callStructured<VisionOutput>({
@@ -273,6 +280,7 @@ export async function runImageDeepInvestigation(
     imageParts: [{ mimeType, data: imageBase64 }],
     timeoutMs: 25_000,
     fallbackModels: IMAGE_DEEP_FALLBACK_MODELS,
+    deadlineAt,
     callSite: "image-analysis.deep",
   });
   return toResult(data, IMAGE_DEEP_ENGINE_VERSION, DEEP_VERDICTS, webPages, language);

@@ -15,9 +15,10 @@ import { useElapsedSeconds } from "@/lib/use-elapsed-seconds";
 // buttons, not two. A photo can contain meaningful text, be itself the
 // thing being judged, or both:
 //
-//   1. Text-in-image (lib/decode-image-text.ts, Tesseract.js, entirely
-//      client-side): if the photo has readable text, it's extracted and
-//      fact-checked (lib/quick-check.ts / lib/deep-investigation.ts).
+//   1. Text-in-image (lib/decode-image-text.ts — server-side Google Vision
+//      OCR as of Sept 24, 2026, was client-side Tesseract.js before that):
+//      if the photo has readable text, it's extracted and fact-checked
+//      (lib/quick-check.ts / lib/deep-investigation.ts).
 //   2. Photo-as-claim (lib/image-analysis.ts, a real vision AI call): the
 //      image is analyzed for visual signs of manipulation/AI generation,
 //      optionally checked against a short user-provided context. Uses its
@@ -44,10 +45,17 @@ import { useElapsedSeconds } from "@/lib/use-elapsed-seconds";
 // anything else — see that file and app/api/verify-image-combined/
 // route.ts for the full rationale.
 //
-// Both OCR text extraction and the vision-upload prep run automatically,
-// client-side, the moment a photo is chosen — no network call happens
-// until the user explicitly presses one of the mode buttons below, same
-// no-surprise-cost principle as every other confirm screen in the app.
+// Vision-upload prep runs automatically, client-side, the moment a photo is
+// chosen. OCR text extraction also runs automatically at that same moment
+// (Sept 24, 2026: now a server call to /api/ocr-image rather than fully
+// client-side Tesseract.js — see lib/decode-image-text.ts) — this is a
+// deliberate, narrow exception to "no network call until a mode button is
+// pressed", justified by the old client-side version having been the exact
+// 40-50s latency problem a real user flagged; it does not charge a credit
+// or run any AI-provider pipeline, only extracts text, so it doesn't carry
+// the same "surprise cost" this principle exists to prevent. No network
+// call that charges credits or runs Quick Check/Deep Investigation happens
+// until the user explicitly presses one of the mode buttons below.
 //
 // WhatsApp media-first flow (Part 13 rework, Sept 18, 2026) — see
 // supabase/migrations/0017_whatsapp_submissions.sql and app/page.tsx's
@@ -92,9 +100,27 @@ function ImageForm() {
     setPrepared(null);
     setSubmitError("");
     try {
-      const [text, image] = await Promise.all([extractTextFromImage(file), prepareImageForUpload(file)]);
-      setOcrText(text || null);
+      // Sept 24, 2026: sequential now, not Promise.all — OCR moved
+      // server-side (see lib/decode-image-text.ts's header) and reuses
+      // THIS SAME prepared image (same 1600px downscale target Tesseract's
+      // own resize used to compute separately) instead of re-processing the
+      // file a second time. The old parallel shape existed to overlap
+      // Tesseract's 40-50s in-browser recognition with image prep; now that
+      // OCR is a ~1-3s network call, that overlap isn't worth a duplicate
+      // canvas resize.
+      const image = await prepareImageForUpload(file);
+      const text = await extractTextFromImage(image.base64, image.mimeType);
+      // Both set together, once both steps are done — hasImage (gated on
+      // `prepared`) is what reveals the Quick Check/Deep Investigation
+      // buttons below, and those buttons read `ocrText` the instant they're
+      // clickable to decide which endpoint to call. Setting `prepared`
+      // early (as soon as prepareImageForUpload resolves, before OCR
+      // finishes) would open a real window where a fast click submits
+      // through the vision-only path with OCR text that was about to
+      // arrive a moment later — same "ready together" guarantee the old
+      // Promise.all version gave for free.
       setPrepared(image);
+      setOcrText(text || null);
     } catch {
       setProcessError(t("qr.decodeErrorGeneric"));
     } finally {

@@ -76,6 +76,17 @@ export const DEEP_ENGINE_VERSION = "v3-gemini-tavily-deep";
 // fallback chain as video-analysis.ts's VIDEO_DEEP_FALLBACK_MODELS.
 const SYNTHESIS_FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"];
 
+// Sept 24, 2026: the decompose call below (cheap tier) was the one
+// callStructured() caller in this file with NO fallbackModels at all — a
+// real production incident showed it burning its full 3-attempt retry
+// budget against the same overloaded model before giving up, wasting time
+// that a fallback model could have used productively (same reasoning as
+// every other fallback list in this codebase: a different model runs on a
+// separate serving pool, so it being overloaded at the exact same moment is
+// unlikely). Falls UP to stronger models, same convention as
+// image-analysis.ts's IMAGE_QUICK_FALLBACK_MODELS for its own cheap-tier call.
+const DECOMPOSE_FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-3.8-flash"];
+
 export interface DeepInvestigationResult {
   verdict: string;
   confidence: number;
@@ -171,7 +182,12 @@ function languageInstruction(language: Language): string {
 
 export async function runDeepInvestigation(
   claimRaw: string,
-  language: Language = "en"
+  language: Language = "en",
+  // Sept 24, 2026 addition — see ai-gateway.ts's DEEP_INVESTIGATION_BUDGET_MS
+  // for the full rationale. Optional and passed straight through to both AI
+  // calls below; every existing caller that doesn't pass it keeps today's
+  // unbounded-by-wall-clock behavior unchanged.
+  deadlineAt?: number
 ): Promise<DeepInvestigationResult> {
   const claim = normalizeClaim(claimRaw);
 
@@ -186,6 +202,8 @@ export async function runDeepInvestigation(
       systemPrompt: DECOMPOSE_SYSTEM_PROMPT,
       userPrompt: `Claim to investigate:\n"${claim}"`,
       responseSchema: DECOMPOSE_SCHEMA,
+      fallbackModels: DECOMPOSE_FALLBACK_MODELS,
+      deadlineAt,
       callSite: "deep-investigation.decompose",
     });
     const cleaned = Array.isArray(data.sub_questions)
@@ -247,6 +265,7 @@ export async function runDeepInvestigation(
     userPrompt,
     responseSchema: SYNTHESIS_SCHEMA,
     fallbackModels: SYNTHESIS_FALLBACK_MODELS,
+    deadlineAt,
     callSite: "deep-investigation.synthesis",
   });
 

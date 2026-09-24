@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runDeepInvestigation, DEEP_ENGINE_VERSION, type DeepInvestigationResult } from "@/lib/deep-investigation";
+import { DEEP_INVESTIGATION_BUDGET_MS } from "@/lib/ai-gateway";
 import { normalizeClaim } from "@/lib/quick-check";
 import {
   computeCacheKey,
@@ -196,7 +197,10 @@ export async function POST(request: Request) {
     result = semanticMatch;
   } else {
     try {
-      result = await runDeepInvestigation(claim, language);
+      // Sept 24, 2026: gives the pipeline a real wall-clock budget instead
+      // of letting its own retry/fallback machinery run unbounded — see
+      // ai-gateway.ts's DEEP_INVESTIGATION_BUDGET_MS for the full rationale.
+      result = await runDeepInvestigation(claim, language, Date.now() + DEEP_INVESTIGATION_BUDGET_MS);
     } catch (err) {
       console.error("[deep] Deep Investigation pipeline failed (refunding credit):", err);
 

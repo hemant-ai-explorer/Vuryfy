@@ -99,6 +99,25 @@ import { estimateGeminiCostUsd } from "@/lib/cost-pricing";
 const GEMINI_MODEL = "gemini-3.1-flash-lite";
 const GEMINI_REASONING_MODEL = "gemini-3.8-flash";
 
+// Sept 24, 2026 — shared time budget for Deep Investigation pipelines
+// (deep-investigation.ts, image-analysis.ts's runImageDeepInvestigation).
+// Root cause of a real user-reported incident: on a Gemini 503 spike, the
+// retry-with-backoff + multi-model-fallback machinery below has no idea how
+// much of the request's maxDuration=60 window is left, so worst case it can
+// legitimately chain retries + fallbacks past Vercel's hard 60s cutoff. When
+// that happens, Vercel force-kills the function mid-flight — which is worse
+// than a normal error, because the route's own catch block (which refunds
+// the just-charged credit) never gets to run either. 45s leaves ~15s for
+// everything a Deep Investigation route does outside this budget (auth,
+// content-safety check, the credit RPC, cache read, and — after this budget
+// is spent — the verifications/credit_transactions inserts), which is
+// generous headroom against a typical <2s of that overhead plus Vercel cold
+// start. Deliberately NOT applied globally: every OTHER callStructured()
+// caller (Quick Check, audio/video Deep Investigation, etc.) still gets
+// today's unbounded-by-wall-clock behavior — deadlineAt is opt-in per call,
+// see below.
+export const DEEP_INVESTIGATION_BUDGET_MS = 45_000;
+
 // Sept 15, 2026: was a fixed const built once from GEMINI_MODEL — now a
 // function, since callStructured() needs to hit a DIFFERENT model's
 // endpoint when falling back (see fallbackModels on StructuredCallParams).
@@ -157,6 +176,15 @@ export interface StructuredCallParams {
   // every other caller, which keeps today's default (2 retries, short
   // backoff) unchanged.
   retryDelaysMs?: number[];
+  // Sept 24, 2026 addition: an absolute deadline (epoch ms, Date.now()-
+  // comparable) this call must respect — see DEEP_INVESTIGATION_BUDGET_MS
+  // above for why. When set: (1) each attempt's own AbortSignal.timeout is
+  // capped to whatever time is actually left, never the full timeoutMs; (2)
+  // a retry or fallback-model attempt is skipped (failing fast with the
+  // last real error) once there isn't enough time left for it to plausibly
+  // finish. Left undefined by every caller that doesn't opt in — those keep
+  // exactly today's unbounded-by-wall-clock behavior.
+  deadlineAt?: number;
   // Sept 15, 2026 addition: ordered list of alternate Gemini model IDs to
   // try, one attempt each (no extra backoff sleep — the primary model's own
   // retryDelaysMs already spent that time), if the primary model's retries
@@ -236,6 +264,20 @@ async function attemptCall<T>(params: StructuredCallParams, apiKey: string, mode
     { text: params.userPrompt },
   ];
 
+  // Sept 24, 2026: when the caller passed a deadlineAt (see StructuredCallParams),
+  // this single attempt can't be allowed the full timeoutMs if less time than
+  // that is actually left — it would just get killed by Vercel instead of by
+  // this AbortSignal, with no chance for tryModelWithRetries/callStructured's
+  // own deadline checks (below) to fail fast and let the route's catch block
+  // (credit refund) run. Floors at 0 rather than going negative; a
+  // deadlineAt already in the past reaching here (shouldn't normally happen —
+  // tryModelWithRetries checks first) still aborts near-instantly rather than
+  // throwing a confusing "negative timeout" error from AbortSignal.timeout.
+  const timeoutMs =
+    params.deadlineAt !== undefined
+      ? Math.max(0, Math.min(params.timeoutMs ?? 20_000, params.deadlineAt - Date.now()))
+      : params.timeoutMs ?? 20_000;
+
   let response: Response;
   try {
     response = await fetch(endpointForModel(model), {
@@ -256,8 +298,9 @@ async function attemptCall<T>(params: StructuredCallParams, apiKey: string, mode
       // Quick Check targets ~5-15s total (Part 26.4) — bound the AI call so
       // a hung request can't block the whole request indefinitely. Callers
       // doing heavier work (e.g. a reasoning-tier vision call) can pass a
-      // longer timeoutMs; still always bounded, never unbounded.
-      signal: AbortSignal.timeout(params.timeoutMs ?? 20_000),
+      // longer timeoutMs; still always bounded, never unbounded. Further
+      // capped to the caller's remaining deadlineAt budget, if any — see above.
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (err) {
     throw new AiGatewayError("Gemini request failed (network/timeout)", err);
@@ -332,12 +375,25 @@ async function tryModelWithRetries<T>(
 ): Promise<StructuredCallResult<T>> {
   let lastErr: unknown;
   for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
+    // Sept 24, 2026: an attempt (after the first) starting with essentially
+    // no budget left would just get capped to a ~0ms AbortSignal.timeout by
+    // attemptCall above and fail anyway — skip it outright and surface the
+    // real last error instead of a confusing instant-timeout one.
+    if (attempt > 0 && params.deadlineAt !== undefined && Date.now() >= params.deadlineAt) {
+      throw lastErr;
+    }
     try {
       return await attemptWithJsonRetry<T>(params, apiKey, model);
     } catch (err) {
       lastErr = err;
       const isLastAttempt = attempt === retryDelays.length;
-      if (!isLastAttempt && isRetryableTransientError(err)) {
+      // Sept 24, 2026: don't sleep out a backoff window that would just eat
+      // into (or exceed) the remaining deadline for no benefit — fail fast
+      // instead so the caller's own deadline-aware fallback/route-level
+      // catch gets a real chance to run before Vercel's own hard cutoff.
+      const budgetForRetry =
+        params.deadlineAt === undefined || Date.now() + retryDelays[attempt] < params.deadlineAt;
+      if (!isLastAttempt && isRetryableTransientError(err) && budgetForRetry) {
         await sleep(retryDelays[attempt]);
         continue;
       }
@@ -454,6 +510,10 @@ export async function callStructured<T>(params: StructuredCallParams): Promise<S
     // enough not to be worth waiting for.
     let lastErr: unknown = primaryErr;
     for (const model of fallbackModels) {
+      // Sept 24, 2026: same reasoning as tryModelWithRetries's own check —
+      // don't start a fallback model attempt with no realistic time left to
+      // finish it; fail fast with whatever real error we already have.
+      if (params.deadlineAt !== undefined && Date.now() >= params.deadlineAt) break;
       try {
         const result = await tryModelWithRetries<T>(params, apiKey, model, []);
         console.log(`[ai-gateway] served by ${model} (tier: ${params.tier}, fallback after ${primaryModel} failed)`);
