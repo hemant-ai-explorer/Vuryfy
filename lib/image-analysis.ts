@@ -262,7 +262,7 @@ export async function runImageDeepInvestigation(
   // Fails open — a missing key or a Vision API error just means no web
   // evidence for this run, not a failed investigation (see
   // lib/web-detection.ts).
-  const webResult = await detectWeb(imageBase64).catch(() => null);
+  const webResult = await detectWeb(imageBase64, "image-analysis.deep.web-detection").catch(() => null);
   const webPages = webResult?.matchingPages ?? [];
 
   const { data } = await callStructured<VisionOutput>({

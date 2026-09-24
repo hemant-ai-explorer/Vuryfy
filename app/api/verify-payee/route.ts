@@ -220,7 +220,7 @@ export async function POST(request: Request) {
   // above) — a plain payee Quick Check never calls this, so no `null` vs
   // `{available:false}` distinction is lost by skipping it: both render as
   // nothing on the result page either way.
-  const registeredIdentity = includeRegisteredName ? await verifyRegisteredName(upiId, payeeName) : null;
+  const registeredIdentity = includeRegisteredName ? await verifyRegisteredName(admin, upiId, payeeName) : null;
 
   const caveats = [translate(language, "payee.disclaimer")];
 

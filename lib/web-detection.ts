@@ -27,6 +27,17 @@
 // web evidence available" and falls back to vision-only analysis rather
 // than failing the whole investigation — the same fail-open principle
 // verification-cache.ts already uses for a secondary/evidence layer.
+//
+// Per-call cost logging (Sept 24, 2026 addition — closes the gap flagged
+// in an earlier cost-instrumentation pull: this provider was being called
+// for real but never priced or logged anywhere). Same fire-and-forget
+// convention lib/search-gateway.ts's logSearchCost() already establishes
+// for a non-token-based provider — see lib/cost-pricing.ts's
+// estimateGoogleVisionCostUsd() for the rate. Callers now pass a required
+// `callSite` label, matching every other gateway function in this app.
+
+import { createAdminClient } from "@/lib/supabase/admin";
+import { estimateGoogleVisionCostUsd } from "@/lib/cost-pricing";
 
 export interface MatchingPage {
   url: string;
@@ -41,7 +52,29 @@ export interface WebDetectionResult {
 const VISION_ENDPOINT = "https://vision.googleapis.com/v1/images:annotate";
 const MAX_PAGES = 10;
 
-export async function detectWeb(imageBase64: string): Promise<WebDetectionResult | null> {
+// Fire-and-forget, same convention as search-gateway.ts's logSearchCost() —
+// never awaited by callers, never allowed to affect the actual Vision
+// request's latency or success/failure. Only called after a real request
+// was actually sent (a missing API key returns early below without
+// logging, same as search-gateway.ts's missing-key path never logging).
+function logVisionCost(callSite: string, status: "success" | "error", errorMessage?: string): void {
+  createAdminClient()
+    .from("api_cost_logs")
+    .insert({
+      provider: "google_vision",
+      model: null,
+      tier: null,
+      call_site: callSite,
+      estimated_cost_usd: status === "success" ? estimateGoogleVisionCostUsd(1) : 0,
+      status,
+      error_message: errorMessage ?? null,
+    })
+    .then(({ error }) => {
+      if (error) console.error("[web-detection] cost log insert failed:", error.message);
+    });
+}
+
+export async function detectWeb(imageBase64: string, callSite: string): Promise<WebDetectionResult | null> {
   const apiKey = process.env.GOOGLE_VISION_API_KEY;
   if (!apiKey) return null; // not configured yet — treated as "no web evidence", not an error
 
@@ -65,8 +98,14 @@ export async function detectWeb(imageBase64: string): Promise<WebDetectionResult
     if (!response.ok) {
       const bodyText = await response.text().catch(() => "");
       console.error("[web-detection] Vision API error", response.status, bodyText.slice(0, 500));
+      logVisionCost(callSite, "error", `API error ${response.status}`);
       return null;
     }
+
+    // Billed the moment Google returns 200, regardless of whether the parsed
+    // body below turns up any matches — an empty result is still a real,
+    // paid call, same principle search-gateway.ts's logSearchCost() applies.
+    logVisionCost(callSite, "success");
 
     const json = await response.json().catch(() => null);
     const web = json?.responses?.[0]?.webDetection;
@@ -90,6 +129,11 @@ export async function detectWeb(imageBase64: string): Promise<WebDetectionResult
     return { matchingPages, bestGuessLabels };
   } catch (err) {
     console.error("[web-detection] request failed:", err);
+    // Network/timeout failure before a response was ever received — no
+    // charge was confirmed, so this logs status:"error" with $0 cost, same
+    // convention search-gateway.ts's logSearchCost() uses for its own
+    // network-failure path.
+    logVisionCost(callSite, "error", err instanceof Error ? err.message : String(err));
     return null;
   }
 }
