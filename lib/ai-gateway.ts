@@ -194,6 +194,17 @@ export interface StructuredCallParams {
   // opt in (video transcription, video Deep Investigation — the two calls
   // with real, repeated live 503s).
   fallbackModels?: string[];
+  // Sept 24, 2026 addition: per-call override for each fallback model's own
+  // retry-with-backoff schedule (default: empty — one immediate attempt per
+  // fallback, no backoff, per fallbackModels's original comment above).
+  // Added after a real incident where deep-investigation.ts's decompose
+  // call burned through its primary model's retries AND both fallback
+  // models' single attempts, all within a couple of seconds, without ever
+  // giving a genuinely short-lived Gemini overload spike a chance to clear
+  // — "failing fast" through every option so quickly that none of them got
+  // a real chance. Left undefined (today's zero-backoff behavior) for every
+  // caller that doesn't opt in.
+  fallbackRetryDelaysMs?: number[];
   // Sept 16, 2026 addition (cost logging, Part 19): a short, hand-written
   // label identifying which pipeline stage this call belongs to (e.g.
   // "quick-check.verdict", "video-analysis.deep") — the aggregation key
@@ -366,7 +377,8 @@ const TRANSIENT_RETRY_DELAYS_MS = [500, 1500]; // 2 retries (3 attempts total), 
 
 // Runs the retry-with-backoff loop against ONE model. Used for both the
 // primary model (with its own retryDelays) and, below, each fallback model
-// (called with an empty retryDelays — one immediate attempt, no backoff).
+// (default: an empty retryDelays — one immediate attempt, no backoff —
+// unless the caller opted into fallbackRetryDelaysMs, see StructuredCallParams).
 async function tryModelWithRetries<T>(
   params: StructuredCallParams,
   apiKey: string,
@@ -515,7 +527,7 @@ export async function callStructured<T>(params: StructuredCallParams): Promise<S
       // finish it; fail fast with whatever real error we already have.
       if (params.deadlineAt !== undefined && Date.now() >= params.deadlineAt) break;
       try {
-        const result = await tryModelWithRetries<T>(params, apiKey, model, []);
+        const result = await tryModelWithRetries<T>(params, apiKey, model, params.fallbackRetryDelaysMs ?? []);
         console.log(`[ai-gateway] served by ${model} (tier: ${params.tier}, fallback after ${primaryModel} failed)`);
         logCost({
           model,
