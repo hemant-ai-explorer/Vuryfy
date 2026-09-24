@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runDeepInvestigation, DEEP_ENGINE_VERSION, type DeepInvestigationResult } from "@/lib/deep-investigation";
+import { DEEP_INVESTIGATION_BUDGET_MS } from "@/lib/ai-gateway";
 import { normalizeClaim } from "@/lib/quick-check";
 import { runImageDeepInvestigation, type ImageAnalysisResult } from "@/lib/image-analysis";
 import { computeCacheKey, getCachedVerification, writeCache, type CachedVerification } from "@/lib/verification-cache";
@@ -147,9 +148,15 @@ export async function POST(request: Request) {
   let textResult: DeepInvestigationResult | CachedVerification;
   let imageResult: ImageAnalysisResult;
   try {
+    // Sept 24, 2026: one shared deadline for both branches of this
+    // Promise.all — they're racing against the SAME 60s route ceiling, so
+    // they need to share one real wall-clock budget rather than each
+    // independently assuming it has the full retry/fallback allowance
+    // available. See ai-gateway.ts's DEEP_INVESTIGATION_BUDGET_MS.
+    const deadlineAt = Date.now() + DEEP_INVESTIGATION_BUDGET_MS;
     const [freshText, freshImage] = await Promise.all([
-      textCached ? Promise.resolve(null) : runDeepInvestigation(ocrText, language),
-      runImageDeepInvestigation(imageBase64, mimeType, context || null, language),
+      textCached ? Promise.resolve(null) : runDeepInvestigation(ocrText, language, deadlineAt),
+      runImageDeepInvestigation(imageBase64, mimeType, context || null, language, deadlineAt),
     ]);
     textResult = textCached ?? (freshText as DeepInvestigationResult);
     imageResult = freshImage as ImageAnalysisResult;

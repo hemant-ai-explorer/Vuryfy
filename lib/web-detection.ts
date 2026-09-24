@@ -74,9 +74,27 @@ function logVisionCost(callSite: string, status: "success" | "error", errorMessa
     });
 }
 
-export async function detectWeb(imageBase64: string, callSite: string): Promise<WebDetectionResult | null> {
+export async function detectWeb(
+  imageBase64: string,
+  callSite: string,
+  // Sept 24, 2026 addition — see ai-gateway.ts's DEEP_INVESTIGATION_BUDGET_MS
+  // for the full rationale. This call runs BEFORE the vision reasoning call
+  // in image-analysis.ts's runImageDeepInvestigation (genuinely sequential:
+  // the reasoning prompt needs this call's output), so with no time left it
+  // would previously still spend up to 15s here before the reasoning call
+  // even got a chance to run. Optional; every other caller is unaffected.
+  deadlineAt?: number
+): Promise<WebDetectionResult | null> {
   const apiKey = process.env.GOOGLE_VISION_API_KEY;
   if (!apiKey) return null; // not configured yet — treated as "no web evidence", not an error
+
+  const remainingMs = deadlineAt !== undefined ? deadlineAt - Date.now() : undefined;
+  // Not enough budget left for this to plausibly help — skip it outright
+  // (fails open, same as every other path in this function) rather than
+  // spending what little time remains on a call whose result the reasoning
+  // step downstream may not even get to use.
+  if (remainingMs !== undefined && remainingMs < 1500) return null;
+  const timeoutMs = remainingMs !== undefined ? Math.max(0, Math.min(15_000, remainingMs)) : 15_000;
 
   try {
     const response = await fetch(`${VISION_ENDPOINT}?key=${apiKey}`, {
@@ -92,7 +110,8 @@ export async function detectWeb(imageBase64: string, callSite: string): Promise<
       }),
       // Kept well under Deep Investigation's sub-30s end-to-end target —
       // this runs alongside (not blocking) the reasoning-tier vision call.
-      signal: AbortSignal.timeout(15_000),
+      // Further capped to the caller's remaining deadlineAt budget, if any.
+      signal: AbortSignal.timeout(timeoutMs),
     });
 
     if (!response.ok) {

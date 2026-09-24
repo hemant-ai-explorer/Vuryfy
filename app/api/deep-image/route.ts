@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runImageDeepInvestigation } from "@/lib/image-analysis";
+import { DEEP_INVESTIGATION_BUDGET_MS } from "@/lib/ai-gateway";
 import { normalizeClaim } from "@/lib/quick-check";
 import { getUserLanguage } from "@/lib/user-language";
 import { checkContentSafety, ContentFlaggedError, hashBase64 } from "@/lib/content-safety";
@@ -102,7 +103,16 @@ export async function POST(request: Request) {
 
   let result;
   try {
-    result = await runImageDeepInvestigation(imageBase64, mimeType, context || null, language);
+    // Sept 24, 2026: gives the pipeline a real wall-clock budget instead of
+    // letting its own retry/fallback machinery run unbounded — see
+    // ai-gateway.ts's DEEP_INVESTIGATION_BUDGET_MS for the full rationale.
+    result = await runImageDeepInvestigation(
+      imageBase64,
+      mimeType,
+      context || null,
+      language,
+      Date.now() + DEEP_INVESTIGATION_BUDGET_MS
+    );
   } catch (err) {
     console.error("[deep-image] pipeline failed (refunding credit):", err);
 
