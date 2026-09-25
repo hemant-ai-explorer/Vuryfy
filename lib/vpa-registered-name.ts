@@ -56,17 +56,20 @@
 // surfacing an error, so hitting this limit degrades to "unavailable,"
 // never a broken check.
 //
-// Field names below come from Decentro's public docs page
-// (docs.decentro.tech/reference/verifypay-V3), not a logged-in view of
-// the developer portal or a real captured response — same "unverified
-// against a real live response" caveat the Eko version carried. Treat the
-// first real staging call as a smoke test; if parsing comes back empty
-// when the raw response clearly has data in it, only this file needs to
-// change. `vpa_status`/`name_match_score`/`name_match_status` are present
-// in Decentro's documented response shape but deliberately NOT used below
-// to gate validity — their exact value semantics aren't confirmed from
-// the docs scrape this was built against, so leaning on `api_status`
-// plus a non-empty `account_holder_name` is the safer bar for now.
+// Field names below were originally guessed from Decentro's public docs
+// page (docs.decentro.tech/reference/verifypay-V3) and were wrong: the
+// first real staging call (Sept 25, 2026) came back `api_status:
+// "SUCCESS"` with the account holder's name under `data.name_as_per_bank`,
+// not `data.account_holder_name` as originally guessed — fixed below. That
+// same real response confirmed `payout_status`/`payout_amount` also come
+// back in `data` (a real ₹1.00 payout — the penny-drop mechanics described
+// above are confirmed, not theoretical), alongside `account_number`
+// (masked), `ifsc`, `bank_reference_number`, and `account_type`, none of
+// which this code currently uses. `vpa_status`/`name_match_score`/
+// `name_match_status` are still NOT confirmed from a real response and
+// remain deliberately unused below to gate validity — leaning on
+// `api_status` plus a non-empty `data.name_as_per_bank` is the safer bar
+// for now.
 //
 // KNOWN GAP: Decentro's response can come back `api_status: "PENDING"`
 // with a separate GET endpoint to poll for the terminal result. That
@@ -219,15 +222,16 @@ async function fetchFromDecentro(upiId: string): Promise<string | null> {
       return null;
     }
 
-    const registeredName: string | undefined = json?.data?.account_holder_name;
+    const registeredName: string | undefined = json?.data?.name_as_per_bank;
     if (!registeredName || typeof registeredName !== "string") {
-      // Same reasoning as above: api_status was SUCCESS but the field this
-      // code expects the name under wasn't there — exactly the kind of
-      // "field names are unverified against a real response" gap the file
-      // header warns about. Log the raw body so the real field name (if
-      // different) is visible instead of silently reporting unavailable.
+      // Sept 25, 2026: this used to check data.account_holder_name, which
+      // a real staging response proved wrong — Decentro's actual field is
+      // data.name_as_per_bank (see file header). Kept as a defensive
+      // fallback in case Decentro's response shape changes again; log the
+      // raw body so a future mismatch is diagnosable instead of silently
+      // reporting unavailable.
       console.error(
-        `[vpa-registered-name] Decentro api_status was SUCCESS but data.account_holder_name was missing/empty — reporting unavailable. body=${JSON.stringify(json)}`
+        `[vpa-registered-name] Decentro api_status was SUCCESS but data.name_as_per_bank was missing/empty — reporting unavailable. body=${JSON.stringify(json)}`
       );
       return null;
     }
