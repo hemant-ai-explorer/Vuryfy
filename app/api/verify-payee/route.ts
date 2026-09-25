@@ -2,8 +2,6 @@ import { NextResponse } from "next/server";
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runQuickCheck, normalizeClaim, ENGINE_VERSION, type QuickCheckResult } from "@/lib/quick-check";
-import { findSimilarPayee } from "@/lib/payee-similarity";
-import { verifyRegisteredName } from "@/lib/vpa-registered-name";
 import { getUserLanguage } from "@/lib/user-language";
 import { translate } from "@/lib/translations";
 import {
@@ -14,7 +12,6 @@ import {
   writeSemanticCache,
   type CachedVerification,
 } from "@/lib/verification-cache";
-import { track } from "@/lib/analytics";
 
 // Route-level execution budget (Sept 2026 fix — see app/api/deep/route.ts's
 // comment for the full rationale). 60 is Hobby's max; without it Vercel's
@@ -65,19 +62,6 @@ export const maxDuration = 60;
 // a hardcoded English const, computed inline in POST() below where
 // `language` is actually known, same pattern as every other pipeline's
 // disclaimer caveat.
-//
-// Sept 23, 2026: revised cost design for the real VPA→registered-name
-// lookup (lib/vpa-registered-name.ts). Deep Investigation bundles it in
-// automatically at no extra cost (its allowance is small enough that the
-// worst case stays under ₹10/month). Quick Check only includes it when the
-// caller explicitly opts in via `include_registered_name: true` in the
-// request body — and that opt-in costs 2 Quick Check credits instead of 1,
-// via decrement_quick_check's new optional p_amount param (migration
-// 0020_registered_name_credit_amount.sql). This halves the worst-case
-// exposure on the Starter plan (max 15 such checks/month instead of 30)
-// versus riding the plain 1-credit charge. An ordinary payee Quick Check
-// (no registered-name opt-in) is completely unaffected — still 1 credit,
-// exactly as before.
 
 function buildPayeeClaim(payeeName: string, upiId: string): string {
   if (payeeName) {
@@ -99,21 +83,12 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const payeeName: string = (body?.payee_name ?? "").trim().slice(0, 200);
   const upiId: string = (body?.upi_id ?? "").trim().slice(0, 200);
-  // Sept 23, 2026: see this file's header comment for the full cost-design
-  // rationale — opting into the real registered-name lookup here costs 2
-  // Quick Check credits instead of 1.
-  const includeRegisteredName: boolean = body?.include_registered_name === true;
-  const quickCheckAmount = includeRegisteredName ? 2 : 1;
 
   if (!upiId) {
     return NextResponse.json({ error: "No payee ID was provided." }, { status: 400 });
   }
 
   const admin = createAdminClient();
-
-  // Analytics (Part 23, Sept 21, 2026) — see lib/analytics.ts's header.
-  track(user.id, "verification_submitted", { mode: "quick", input_type: "payee_reputation" });
-
   const language = await getUserLanguage(admin, user.id);
   const cacheNamespace = language === "en" ? "payee_reputation" : `payee_reputation:${language}`;
   const searchClaim = buildPayeeClaim(payeeName, upiId);
@@ -123,7 +98,6 @@ export async function POST(request: Request) {
 
   const { data: remaining, error: rpcError } = await admin.rpc("decrement_quick_check", {
     p_user_id: user.id,
-    p_amount: quickCheckAmount,
   });
 
   if (rpcError) {
@@ -134,7 +108,6 @@ export async function POST(request: Request) {
     );
   }
   if (remaining === null || remaining === undefined) {
-    track(user.id, "credits_exhausted", { mode: "quick", credit_type: "quick_check" });
     return NextResponse.json(
       { error: "You're out of Quick Check credits. Upgrade your plan to continue." },
       { status: 402 }
@@ -174,25 +147,15 @@ export async function POST(request: Request) {
     } catch (err) {
       console.error("[verify-payee] pipeline failed (refunding credit):", err);
 
-      const { error: refundError } = await admin.rpc("refund_quick_check", {
-        p_user_id: user.id,
-        p_amount: quickCheckAmount,
-      });
+      const { error: refundError } = await admin.rpc("refund_quick_check", { p_user_id: user.id });
       if (refundError) {
         console.error("[verify-payee] refund_quick_check RPC ALSO failed:", refundError);
       }
 
       await admin.from("credit_transactions").insert([
-        { user_id: user.id, credit_type: "quick_check", amount: -quickCheckAmount, reason: "quick_check_reserved" },
-        {
-          user_id: user.id,
-          credit_type: "quick_check",
-          amount: quickCheckAmount,
-          reason: "quick_check_refunded_infra_error",
-        },
+        { user_id: user.id, credit_type: "quick_check", amount: -1, reason: "quick_check_reserved" },
+        { user_id: user.id, credit_type: "quick_check", amount: 1, reason: "quick_check_refunded_infra_error" },
       ]);
-
-      track(user.id, "verification_failed", { mode: "quick", input_type: "payee_reputation", reason: "infra_error" });
 
       return NextResponse.json(
         {
@@ -205,22 +168,6 @@ export async function POST(request: Request) {
       );
     }
   }
-
-  // Sept 23, 2026: the impersonation/look-alike warning now surfaces only
-  // here — as part of the credit-charged result — never on the free
-  // pre-choice payment card. See lib/payee-similarity.ts's header for the
-  // full rationale. Computed fresh every request, independent of the
-  // verdict cache above, since scan history can change between requests.
-  const similarMatch = await findSimilarPayee(admin, user.id, upiId, payeeName);
-
-  // Sept 23, 2026: see lib/vpa-registered-name.ts's header and this file's
-  // header for the full rationale — currently always resolves to
-  // { available: false } since no real provider is wired in yet. Only
-  // attempted when the caller opted in (and paid the extra credit for it,
-  // above) — a plain payee Quick Check never calls this, so no `null` vs
-  // `{available:false}` distinction is lost by skipping it: both render as
-  // nothing on the result page either way.
-  const registeredIdentity = includeRegisteredName ? await verifyRegisteredName(admin, upiId, payeeName) : null;
 
   const caveats = [translate(language, "payee.disclaimer")];
 
@@ -267,23 +214,15 @@ export async function POST(request: Request) {
     }
   }
 
-  // Sept 23, 2026: reason string gets a "_with_registered_name" suffix
-  // when the caller opted into (and paid the extra credit for) the real
-  // VPA lookup, so the billing ledger shows which 2-credit charges were
-  // for that specifically — independent of the amount field, which
-  // already reflects the actual credits moved (-1 vs -2).
-  let quickCheckReason = cacheHit
-    ? cacheMatchType === "semantic"
-      ? "quick_check_completed_payee_cache_hit_semantic"
-      : "quick_check_completed_payee_cache_hit"
-    : "quick_check_completed_payee";
-  if (includeRegisteredName) quickCheckReason += "_with_registered_name";
-
   const { error: txnError } = await admin.from("credit_transactions").insert({
     user_id: user.id,
     credit_type: "quick_check",
-    amount: -quickCheckAmount,
-    reason: quickCheckReason,
+    amount: -1,
+    reason: cacheHit
+      ? cacheMatchType === "semantic"
+        ? "quick_check_completed_payee_cache_hit_semantic"
+        : "quick_check_completed_payee_cache_hit"
+      : "quick_check_completed_payee",
     verification_id: verification.id,
   });
   if (txnError) {
@@ -295,15 +234,6 @@ export async function POST(request: Request) {
     .select("quick_checks_remaining, deep_investigations_remaining")
     .eq("user_id", user.id)
     .single();
-
-  track(user.id, "verification_completed", {
-    mode: "quick",
-    input_type: "payee_reputation",
-    verdict: verification.verdict,
-    cached: cacheHit,
-    cache_match_type: cacheMatchType,
-    engine_version: verification.engine_version,
-  });
 
   return NextResponse.json({
     id: verification.id,
@@ -320,8 +250,6 @@ export async function POST(request: Request) {
     // are all still returned unchanged below for that rendering to use.
     type: "payee_reputation",
     payee: { name: payeeName || null, upiId },
-    similarMatch,
-    registeredIdentity,
     claim: verification.claim_text,
     verdict: verification.verdict,
     confidence: verification.confidence,
