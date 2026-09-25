@@ -208,11 +208,27 @@ async function fetchFromDecentro(upiId: string): Promise<string | null> {
     }
 
     if (json?.api_status !== "SUCCESS") {
+      // Sept 25, 2026: this used to return silently here — meaning a real
+      // "FAILURE" (or any other unexpected api_status) response from
+      // Decentro was completely invisible in the logs, indistinguishable
+      // from "the call never fired." Log the raw body so a real failure is
+      // diagnosable instead of just showing up as "unavailable" everywhere.
+      console.error(
+        `[vpa-registered-name] Decentro api_status was "${json?.api_status}" (not SUCCESS) — reporting unavailable. body=${JSON.stringify(json)}`
+      );
       return null;
     }
 
     const registeredName: string | undefined = json?.data?.account_holder_name;
     if (!registeredName || typeof registeredName !== "string") {
+      // Same reasoning as above: api_status was SUCCESS but the field this
+      // code expects the name under wasn't there — exactly the kind of
+      // "field names are unverified against a real response" gap the file
+      // header warns about. Log the raw body so the real field name (if
+      // different) is visible instead of silently reporting unavailable.
+      console.error(
+        `[vpa-registered-name] Decentro api_status was SUCCESS but data.account_holder_name was missing/empty — reporting unavailable. body=${JSON.stringify(json)}`
+      );
       return null;
     }
     return registeredName;
