@@ -62,6 +62,7 @@ export async function POST(request: Request) {
       contentType: "image",
       contentHash: hashBase64(imageBase64),
       sourceRoute: "ocr-image",
+      imageBase64,
     });
   } catch (err) {
     if (err instanceof ContentFlaggedError) {

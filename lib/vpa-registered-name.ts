@@ -14,83 +14,91 @@
 // payment — a live call into the NPCI/bank network itself, the only real
 // source of truth for VPA ownership.
 //
-// That access is NOT free and NOT obtainable without a paid, licensed
-// integration — this cannot be built as a plain web search or a client-
-// side check the way everything else in this file's neighbors is. Real
-// options researched (Sept 23, 2026): Eko (eps.eko.in — ₹1.44/lookup
-// ex-GST, self-serve sign-up with OTP, sandbox instant, production needs
-// basic KYC + a prepaid wallet — the fastest realistic path to test this
-// for real), Cashfree's Secure ID / Verify UPI (no public per-call price,
-// self-serve signup + free trial, contact sales for production terms),
-// Decentro (basic valid/invalid vs. advanced holder-name/IFSC/MCC tiers,
-// no public pricing), or becoming an NPCI-certified TPAP directly via a
-// sponsor bank (RazorpayX's Validate VPA API works this way — heavy,
-// requires an actual current-account banking relationship, not realistic
-// as a quick add-on).
-//
-// Cost/credit design (user's explicit decision, Sept 23, 2026 — revised
-// same day after the first version of this design, which charged the
-// plain 1-credit rate, turned out to let a Starter user spend their whole
-// 30-Quick-Check monthly allowance on this ~₹1.70/lookup path for
-// ~₹50-75/month against a ₹99 plan): still no separate button or API
-// route, but a two-tier charge instead of one flat rate —
-//   - Deep Investigation (app/api/deep-payee/route.ts) bundles this in
-//     automatically, unconditionally, at no extra credit cost. Safe
-//     because DI's allowance is small (2-5/month), so the worst case
-//     stays under ₹10/month even fully loaded.
-//   - Quick Check (app/api/verify-payee/route.ts) only runs this when the
-//     caller explicitly opts in via `include_registered_name: true`, and
-//     that opt-in costs 2 Quick Check credits instead of 1 (see
-//     decrement_quick_check's p_amount param, migration
-//     0020_registered_name_credit_amount.sql). This halves the Quick
-//     Check worst case (max 15 such checks/month on Starter instead of
-//     30). An ordinary payee Quick Check (no opt-in) is unaffected.
-//
 // ============================================================================
-// WIRED IN — Sept 24, 2026. Eko issued live production credentials for
-// their Connected Banking / UPI ID Verification API. Two honest, by-design
-// limitations (not bugs — this file still never fabricates a result):
+// PROVIDER SWITCH: Eko -> Decentro — Sept 25, 2026.
 //
-// 1. Eko's endpoint validates a (VPA, mobile number) PAIR — recipient_
-//    mobile is a required input, not just an output. Vuryfy's actual data
-//    (a scanned payment QR) only ever supplies a UPI ID and a claimed
-//    name, never a phone number. Where the VPA's own local-part (before
-//    the "@") is itself a 10-digit Indian mobile number — true for most
-//    personal UPI handles, e.g. "98765xxxxx@ybl" — that number doubles as
-//    recipient_mobile. For merchant-style handles (e.g. "amazon@icici",
-//    "flipkart.rzp@icici") there is no phone number anywhere in the
-//    input, so this reports { available: false } rather than guessing or
-//    fabricating one. In practice: this real-name check currently only
-//    resolves for personal-handle VPAs, not merchant ones — worth knowing
-//    when judging how often it'll actually show something on the result
-//    page.
-// 2. Field/endpoint names below come from Eko's public docs pages
-//    (eps.eko.in/docs/upi-validate-vpa, developers.eko.in/reference/dwqd),
-//    not a logged-in view of the developer portal, and are UNVERIFIED
-//    against a real live response. Eko's own onboarding email recommends
-//    testing via Postman first and sharing the raw response if anything
-//    errors — treat the first real call in production as that smoke test.
-//    If the response shape differs from what's parsed below, only this
-//    file needs to change.
+// First wired up Sept 24, 2026 against Eko's Connected Banking / UPI ID
+// Verification API. Eko turned out to have a real, blocking limitation:
+// its endpoint validates a (VPA, mobile number) PAIR — recipient_mobile is
+// a REQUIRED input, not just an output — and Vuryfy's actual data (a
+// scanned payment QR) only ever supplies a UPI ID, never a phone number.
+// Eko could only resolve personal-handle VPAs where the local part
+// (before "@") happens to itself be a 10-digit mobile number
+// ("98765xxxxx@ybl") — every merchant-style handle ("amazon@icici",
+// "flipkart.rzp@icici") came back { available: false }, which is most of
+// what a real user actually wants checked. User's call, Sept 25, 2026:
+// drop Eko entirely, switch to Decentro's VerifyPay (V3) as the sole
+// provider — its request body takes only upi_vpa, no phone number
+// required, so it resolves personal AND merchant VPAs alike.
 //
-// Required env vars (Vercel project settings — never committed to git):
-// EKO_DEVELOPER_KEY, EKO_INITIATOR_ID, EKO_ACCESS_KEY (Eko's
-// "Authenticator Key" — used to derive the per-request secret-key, never
-// sent as-is). Optional: EKO_USER_CODE (Eko's "retailer user code" — leave
-// unset unless Eko support says this account needs it), EKO_BASE_URL
-// (defaults to the production base URL Eko issued), EKO_LATLONG (defaults
-// to Vuryfy's registered business location in Gomti Nagar, Lucknow — the
-// API requires geo-coordinates of the request origin and there is no
-// end-user location available server-side for this lookup).
+// The real cost of that fix: Decentro's VerifyPay does NOT do a passive
+// lookup — per their docs, "Decentro will perform a penny drop (INR 1.00)
+// or a paisa drop (INR 0.01) as part of the validation process" on EVERY
+// call. This is a genuine, real money transfer into the payee's bank
+// account (from Vuryfy's Decentro settlement account), not just an API
+// read. Explicitly discussed with the user (Sept 25, 2026): this stays
+// invisible to the end user exactly like the Eko check was — no new
+// disclosure UI, same silent bundled-in-DI / 2-credit-opt-in-in-QC cost
+// design already locked in (see 0023_registered_name_credit_amount.sql).
+// The end user experiences this exactly as "checking a name"; the real
+// fund movement happens behind that, funded from Vuryfy's own settlement
+// balance with Decentro. This mirrors how every mainstream UPI app (GPay,
+// PhonePe) already resolves a "Verified Name" the same way behind the
+// scenes before a payment — Vuryfy isn't introducing a new pattern here.
 //
-// Caching: as flagged when this was first scaffolded, a registered name
-// essentially never changes, so results are cached by UPI ID in the new
-// vpa_registered_name_cache table (see supabase/migrations/
+// Rate limits (Decentro's own, not something this code needs to enforce
+// itself): 3/min, 4/hour, 5/day, scoped to the mobile number Decentro
+// resolves as tied to the VPA being checked (not per Vuryfy user, and not
+// something this code supplies as an input) — a single popular payee
+// could hit that cap after enough distinct Vuryfy users check it in one
+// day. Handled the same way as every other failure mode here: a 4xx/5xx
+// or unexpected response just returns null (available: false) rather than
+// surfacing an error, so hitting this limit degrades to "unavailable,"
+// never a broken check.
+//
+// Field names below were originally guessed from Decentro's public docs
+// page (docs.decentro.tech/reference/verifypay-V3) and were wrong: the
+// first real staging call (Sept 25, 2026) came back `api_status:
+// "SUCCESS"` with the account holder's name under `data.name_as_per_bank`,
+// not `data.account_holder_name` as originally guessed — fixed below. That
+// same real response confirmed `payout_status`/`payout_amount` also come
+// back in `data` (a real ₹1.00 payout — the penny-drop mechanics described
+// above are confirmed, not theoretical), alongside `account_number`
+// (masked), `ifsc`, `bank_reference_number`, and `account_type`, none of
+// which this code currently uses. `vpa_status`/`name_match_score`/
+// `name_match_status` are still NOT confirmed from a real response and
+// remain deliberately unused below to gate validity — leaning on
+// `api_status` plus a non-empty `data.name_as_per_bank` is the safer bar
+// for now.
+//
+// KNOWN GAP: Decentro's response can come back `api_status: "PENDING"`
+// with a separate GET endpoint to poll for the terminal result. That
+// polling endpoint's exact path isn't confirmed from the docs scrape this
+// was built against, so a PENDING response is currently treated as
+// "unavailable" (returns null) rather than guessing an unverified
+// endpoint — worth revisiting once a real PENDING response is seen in
+// practice (Decentro's own onboarding note said staging responses aren't
+// real-time, so this may show up often there and rarely in production).
+//
+// Required env vars (Vercel project settings — never committed to git,
+// set separately for Preview/vuryfy-test and Production/vuryfy-prod since
+// Decentro issues distinct staging vs. production credentials and base
+// URLs): DECENTRO_CLIENT_ID, DECENTRO_CLIENT_SECRET, DECENTRO_CONSUMER_URN,
+// DECENTRO_BASE_URL (e.g. https://staging.api.decentro.tech on test,
+// https://api.decentro.tech on prod — no hardcoded default, since silently
+// picking either one on a missing/misconfigured var risks either quietly
+// no-op'ing or quietly spending real production money; missing config just
+// reports unavailable, same as every other missing-config path here). The
+// old EKO_* env vars are no longer read by this file and can be removed
+// from Vercel once this ships.
+//
+// Caching: unchanged from the Eko version — a registered name essentially
+// never changes, so results are cached by UPI ID in
+// vpa_registered_name_cache (supabase/migrations/
 // 0021_vpa_registered_name_cache.sql) with a 90-day TTL, checked before
-// any billed Eko call. This is why verifyRegisteredName() now takes an
-// `admin` client as its first argument — the one call-site change beyond
-// this file (app/api/verify-payee/route.ts and app/api/deep-payee/
-// route.ts each already have `admin` in scope; both just pass it through).
+// any billed/real-money Decentro call. This matters even more now than it
+// did for Eko, since a cache hit is the difference between a free lookup
+// and a real bank transfer.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import crypto from "node:crypto";
@@ -100,12 +108,7 @@ export type RegisteredNameResult =
   | { available: false }
   | { available: true; registeredName: string; matchesClaimedName: boolean };
 
-const EKO_VPA_VALIDATE_PATH = "/v3/customer/payment/upi/validate-vpa";
-const DEFAULT_EKO_BASE_URL = "https://api.eko.in:25002/ekoicici";
-// Vuryfy's registered business location (Gomti Nagar, Lucknow) — used as
-// the request-origin latlong Eko's API requires, since there is no
-// end-user geolocation available server-side for this lookup.
-const DEFAULT_LATLONG = "26.8500,80.9970";
+const DECENTRO_VERIFY_PAY_PATH = "/v3/banking/verify_pay";
 
 const CACHE_TABLE = "vpa_registered_name_cache";
 const CACHE_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days — see file header.
@@ -115,22 +118,6 @@ const CACHE_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days — see file header.
 const MATCH_THRESHOLD = 0.82;
 
 let warnedMissingConfigOnce = false;
-
-// A VPA's local-part (before "@") that is itself a 10-digit Indian mobile
-// number — true for most personal UPI handles, false for merchant-style
-// handles. See file header, limitation 1.
-function extractMobileFromVpa(upiId: string): string | null {
-  const localPart = upiId.split("@")[0]?.trim() ?? "";
-  return /^[6-9]\d{9}$/.test(localPart) ? localPart : null;
-}
-
-function computeSecretKey(accessKey: string, timestampMs: string): string {
-  // Per Eko's auth guide: base64-encode the access key and use THAT
-  // encoded string (not the raw key) as the HMAC key, signing the
-  // timestamp as the message.
-  const encodedKey = Buffer.from(accessKey).toString("base64");
-  return crypto.createHmac("sha256", encodedKey).update(timestampMs).digest("base64");
-}
 
 async function getCachedRegisteredName(admin: SupabaseClient, upiId: string): Promise<string | null> {
   const { data, error } = await admin
@@ -150,88 +137,107 @@ async function writeCachedRegisteredName(admin: SupabaseClient, upiId: string, r
     .from(CACHE_TABLE)
     .upsert({ upi_id: upiId, registered_name: registeredName, fetched_at: new Date().toISOString() });
   if (error) {
-    // Never let a cache-write failure block returning the real result —
-    // it just means the next lookup of this UPI ID re-fetches (and
-    // re-bills) instead of hitting cache. Log loudly since repeated
-    // misses here quietly cost real money.
-    console.error("[vpa-registered-name] failed to write cache row (next lookup will re-fetch):", error);
+    // Never let a cache-write failure block returning the real result — it
+    // just means the next lookup of this UPI ID re-fetches (and re-bills,
+    // now with a real fund transfer) instead of hitting cache. Log loudly
+    // since repeated misses here quietly cost real money.
+    console.error("[vpa-registered-name] failed to write cache row (next lookup will re-fetch and re-transfer):", error);
   }
 }
 
-// The real Eko call. Returns the registered name, or null if the lookup
-// is genuinely unavailable (missing config, no derivable mobile number,
-// API error, invalid VPA) — never fabricated. See file header for the
-// full rationale on both limitations.
-async function fetchFromEko(upiId: string, claimedName: string): Promise<string | null> {
-  const developerKey = process.env.EKO_DEVELOPER_KEY;
-  const initiatorId = process.env.EKO_INITIATOR_ID;
-  const accessKey = process.env.EKO_ACCESS_KEY;
+// The real Decentro VerifyPay call. Returns the registered name, or null
+// if the lookup is genuinely unavailable (missing config, API error,
+// invalid VPA, unresolved PENDING) — never fabricated. See file header for
+// the full rationale, including the real-money mechanics and the PENDING
+// gap.
+async function fetchFromDecentro(upiId: string): Promise<string | null> {
+  const clientId = process.env.DECENTRO_CLIENT_ID;
+  const clientSecret = process.env.DECENTRO_CLIENT_SECRET;
+  const consumerUrn = process.env.DECENTRO_CONSUMER_URN;
+  const baseUrl = process.env.DECENTRO_BASE_URL;
 
-  if (!developerKey || !initiatorId || !accessKey) {
+  if (!clientId || !clientSecret || !consumerUrn || !baseUrl) {
     if (!warnedMissingConfigOnce) {
       warnedMissingConfigOnce = true;
       console.error(
-        "[vpa-registered-name] EKO_DEVELOPER_KEY/EKO_INITIATOR_ID/EKO_ACCESS_KEY not configured — " +
-          "reporting unavailable for every lookup until set in Vercel env vars."
+        "[vpa-registered-name] DECENTRO_CLIENT_ID/DECENTRO_CLIENT_SECRET/DECENTRO_CONSUMER_URN/DECENTRO_BASE_URL " +
+          "not fully configured — reporting unavailable for every lookup until set in Vercel env vars."
       );
     }
     return null;
   }
 
-  const recipientMobile = extractMobileFromVpa(upiId);
-  if (!recipientMobile) {
-    // Merchant-style VPA — no phone number anywhere in the input. See
-    // file header, limitation 1. Not an error; just not answerable today.
-    return null;
-  }
-
-  const baseUrl = process.env.EKO_BASE_URL || DEFAULT_EKO_BASE_URL;
-  const latlong = process.env.EKO_LATLONG || DEFAULT_LATLONG;
-  const timestampMs = Date.now().toString();
-  const secretKey = computeSecretKey(accessKey, timestampMs);
-
-  const payload: Record<string, string> = {
-    initiator_id: initiatorId,
-    client_ref_id: crypto.randomUUID(),
-    customer_vpa: upiId,
-    recipient_mobile: recipientMobile,
-    name: claimedName || upiId,
-    latlong,
+  const payload = {
+    consumer_urn: consumerUrn,
+    is_consent_granted: true,
+    // 32 lowercase-hex chars — well within the documented 2-100 char,
+    // no-special-character requirement for reference_id.
+    reference_id: crypto.randomBytes(16).toString("hex"),
+    upi_vpa: upiId,
+    purpose_message: "Vuryfy identity check",
   };
-  if (process.env.EKO_USER_CODE) {
-    payload.user_code = process.env.EKO_USER_CODE;
-  }
 
   try {
-    const response = await fetch(`${baseUrl}${EKO_VPA_VALIDATE_PATH}`, {
+    const response = await fetch(`${baseUrl}${DECENTRO_VERIFY_PAY_PATH}`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        developer_key: developerKey,
-        "secret-key": secretKey,
-        "secret-key-timestamp": timestampMs,
+        client_id: clientId,
+        client_secret: clientSecret,
       },
       body: JSON.stringify(payload),
+      // A real bank-network call — give it real room, but still bounded;
+      // this runs inline in a Quick Check/Deep Investigation request, not
+      // a background job.
+      signal: AbortSignal.timeout(15_000),
     });
 
     const json = await response.json().catch(() => null);
 
     if (!response.ok) {
       console.error(
-        `[vpa-registered-name] Eko API returned ${response.status} — reporting unavailable. body=${JSON.stringify(json)}`
+        `[vpa-registered-name] Decentro API returned ${response.status} — reporting unavailable. body=${JSON.stringify(json)}`
       );
       return null;
     }
 
-    const registeredName: string | undefined = json?.data?.recipient_name;
-    const isValid: boolean | undefined = json?.data?.valid;
+    if (json?.api_status === "PENDING") {
+      // See file header, KNOWN GAP — polling endpoint not yet wired.
+      console.error(
+        "[vpa-registered-name] Decentro returned PENDING (async polling not yet implemented) — reporting unavailable for this call:",
+        JSON.stringify(json)
+      );
+      return null;
+    }
 
-    if (!registeredName || isValid === false) {
+    if (json?.api_status !== "SUCCESS") {
+      // Sept 25, 2026: this used to return silently here — meaning a real
+      // "FAILURE" (or any other unexpected api_status) response from
+      // Decentro was completely invisible in the logs, indistinguishable
+      // from "the call never fired." Log the raw body so a real failure is
+      // diagnosable instead of just showing up as "unavailable" everywhere.
+      console.error(
+        `[vpa-registered-name] Decentro api_status was "${json?.api_status}" (not SUCCESS) — reporting unavailable. body=${JSON.stringify(json)}`
+      );
+      return null;
+    }
+
+    const registeredName: string | undefined = json?.data?.name_as_per_bank;
+    if (!registeredName || typeof registeredName !== "string") {
+      // Sept 25, 2026: this used to check data.account_holder_name, which
+      // a real staging response proved wrong — Decentro's actual field is
+      // data.name_as_per_bank (see file header). Kept as a defensive
+      // fallback in case Decentro's response shape changes again; log the
+      // raw body so a future mismatch is diagnosable instead of silently
+      // reporting unavailable.
+      console.error(
+        `[vpa-registered-name] Decentro api_status was SUCCESS but data.name_as_per_bank was missing/empty — reporting unavailable. body=${JSON.stringify(json)}`
+      );
       return null;
     }
     return registeredName;
   } catch (err) {
-    console.error("[vpa-registered-name] Eko API call failed — reporting unavailable:", err);
+    console.error("[vpa-registered-name] Decentro API call failed — reporting unavailable:", err);
     return null;
   }
 }
@@ -246,7 +252,7 @@ export async function verifyRegisteredName(
 
   let registeredName = await getCachedRegisteredName(admin, normalizedUpiId);
   if (!registeredName) {
-    registeredName = await fetchFromEko(normalizedUpiId, claimedName);
+    registeredName = await fetchFromDecentro(normalizedUpiId);
     if (!registeredName) return { available: false };
     await writeCachedRegisteredName(admin, normalizedUpiId, registeredName);
   }

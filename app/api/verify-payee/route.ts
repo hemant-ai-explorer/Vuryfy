@@ -73,7 +73,7 @@ export const maxDuration = 60;
 // caller explicitly opts in via `include_registered_name: true` in the
 // request body — and that opt-in costs 2 Quick Check credits instead of 1,
 // via decrement_quick_check's new optional p_amount param (migration
-// 0020_registered_name_credit_amount.sql). This halves the worst-case
+// 0023_registered_name_credit_amount.sql). This halves the worst-case
 // exposure on the Starter plan (max 15 such checks/month instead of 30)
 // versus riding the plain 1-credit charge. An ordinary payee Quick Check
 // (no registered-name opt-in) is completely unaffected — still 1 credit,
@@ -214,12 +214,15 @@ export async function POST(request: Request) {
   const similarMatch = await findSimilarPayee(admin, user.id, upiId, payeeName);
 
   // Sept 23, 2026: see lib/vpa-registered-name.ts's header and this file's
-  // header for the full rationale — currently always resolves to
-  // { available: false } since no real provider is wired in yet. Only
-  // attempted when the caller opted in (and paid the extra credit for it,
-  // above) — a plain payee Quick Check never calls this, so no `null` vs
-  // `{available:false}` distinction is lost by skipping it: both render as
-  // nothing on the result page either way.
+  // header for the full rationale. Sept 25, 2026: now backed by a real
+  // Decentro VerifyPay call (see that file's header for the Eko->Decentro
+  // switch and the real-money penny-drop mechanics it entails) rather than
+  // a stub — resolves to { available: false } only on missing config, an
+  // API error, or an unresolved/PENDING provider response, never
+  // fabricated. Only attempted when the caller opted in (and paid the
+  // extra credit for it, above) — a plain payee Quick Check never calls
+  // this, so no `null` vs `{available:false}` distinction is lost by
+  // skipping it: both render as nothing on the result page either way.
   const registeredIdentity = includeRegisteredName ? await verifyRegisteredName(admin, upiId, payeeName) : null;
 
   const caveats = [translate(language, "payee.disclaimer")];
