@@ -201,6 +201,19 @@ async function matchPhotoDnaHashes(
         "Ocp-Apim-Subscription-Key": apiKey,
       },
       body: JSON.stringify(requestBody),
+      // Sept 28, 2026 fix — this was the one outbound call in the whole
+      // codebase with no bound (ai-gateway.ts's Gemini calls: 20s,
+      // search-gateway.ts's Tavily call: 15s). This scan runs BEFORE the
+      // real verification pipelines, sequentially, inside the same 60s
+      // Vercel route budget (see verify-image-combined/route.ts's
+      // maxDuration) — a slow PhotoDNA response could eat most of that
+      // budget before the actual Quick Check AI calls even started,
+      // starving them and tripping the route's infra-error/refund path
+      // ("Try Again") even though nothing was actually wrong with the
+      // image or the AI providers. Bounded here the same way every other
+      // provider call already is; a timeout still fails open below,
+      // exactly like a real network error already did.
+      signal: AbortSignal.timeout(10_000),
     });
   } catch (err) {
     console.error("[content-safety] PhotoDNA MatchHash request failed (network) — failing open:", err);
