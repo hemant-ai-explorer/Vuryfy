@@ -223,12 +223,15 @@ export default function VerifyQrPage() {
 
         {!decoded && !paymentInfo && (
           <>
+            {/* Sept 28, 2026: capture="environment" removed — same real-device
+                bug as app/verify/image/page.tsx's identical input (see its
+                comment): forced camera-only capture, no "Photo Library"
+                option in the picker. */}
             <input
               ref={fileInputRef}
               id="qr-file"
               type="file"
               accept="image/*"
-              capture="environment"
               className="qr-file-input"
               onChange={(e) => {
                 const file = e.target.files?.[0];
