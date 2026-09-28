@@ -231,12 +231,17 @@ function ImageForm() {
         {!hasImage && (
           <>
             {loadingWaImage && <p className="hint">Loading your photo from WhatsApp…</p>}
+            {/* Sept 28, 2026: capture="environment" removed — real-device bug
+                report (this input, and QR's identical one, silently skipped
+                straight to the camera on the user's phone with no "Photo
+                Library" option in the picker). Audio/video's inputs never
+                had `capture` and always showed the full picker (Photo
+                Library / Take Photo / Choose File) — matching that here. */}
             <input
               ref={fileInputRef}
               id="image-file"
               type="file"
               accept="image/*"
-              capture="environment"
               className="qr-file-input"
               onChange={(e) => {
                 const file = e.target.files?.[0];
