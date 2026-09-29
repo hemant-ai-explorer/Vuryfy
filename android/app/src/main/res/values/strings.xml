@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Vuryfy</string>
+    <string name="title_activity_main">Vuryfy</string>
+    <string name="package_name">com.vuryfy.app</string>
+    <string name="custom_url_scheme">com.vuryfy.app</string>
+</resources>
