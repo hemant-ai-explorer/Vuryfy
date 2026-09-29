@@ -7,6 +7,7 @@ import { uploadVideoToStorage, deleteUploadedVideo, type UploadedVideo } from "@
 import { useLanguage } from "@/app/providers/language-provider";
 import { parseJsonResponse } from "@/lib/safe-json";
 import { useElapsedSeconds } from "@/lib/use-elapsed-seconds";
+import { apiFetch } from "@/lib/api-fetch";
 
 // Video input — the last step in the locked media-type build order (text +
 // link -> QR -> image -> audio -> video), shipping after audio per the
@@ -70,7 +71,7 @@ export default function VerifyVideoPage() {
       setUploading(false);
       setProcessing(true);
 
-      const r = await fetch("/api/transcribe-video", {
+      const r = await apiFetch("/api/transcribe-video", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ storage_path: video.storagePath, mime_type: video.mimeType }),
@@ -98,7 +99,7 @@ export default function VerifyVideoPage() {
     setSubmitError("");
     try {
       const endpoint = mode === "quick" ? "/api/verify-video-combined" : "/api/deep-video-combined";
-      const r = await fetch(endpoint, {
+      const r = await apiFetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -127,7 +128,7 @@ export default function VerifyVideoPage() {
     setSubmitError("");
     try {
       const endpoint = mode === "quick" ? "/api/verify-video" : "/api/deep-video";
-      const r = await fetch(endpoint, {
+      const r = await apiFetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

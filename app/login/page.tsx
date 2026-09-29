@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useLanguage } from "@/app/providers/language-provider";
 import { SUPPORTED_LANGUAGES, type Language } from "@/lib/translations";
 import { posthog } from "@/app/providers/posthog-provider";
+import { apiFetch } from "@/lib/api-fetch";
 
 // Phone OTP via Supabase Auth directly (no custom backend endpoint —
 // Supabase handles the challenge/verify state itself). Real SMS delivery
@@ -119,7 +120,7 @@ function LoginForm() {
       // preference, so this skips the hasPreference branch below entirely
       // and goes straight to the plan-selection stub.
       try {
-        await fetch("/api/preferences", {
+        await apiFetch("/api/preferences", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ language: selectedLanguage, full_name: name.trim() }),

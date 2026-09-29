@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useLanguage } from "@/app/providers/language-provider";
 import { translateVerdict } from "@/lib/translations";
 import { parseJsonResponse } from "@/lib/safe-json";
+import { apiFetch } from "@/lib/api-fetch";
 
 type PaymentReceiptInfo = {
   amount?: string;
@@ -146,7 +147,7 @@ function ResultView() {
       router.replace("/");
       return;
     }
-    fetch(`/api/verifications/${id}`)
+    apiFetch(`/api/verifications/${id}`)
       .then((res) => (res.ok ? res.json() : Promise.reject()))
       .then((d) => setR(d))
       .catch(() => setNotFound(true));
@@ -178,7 +179,7 @@ function ResultView() {
     setPayeeCheckError("");
     try {
       const endpoint = mode === "quick" ? "/api/verify-payee" : "/api/deep-payee";
-      const res = await fetch(endpoint, {
+      const res = await apiFetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

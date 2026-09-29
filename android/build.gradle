@@ -1,0 +1,42 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+
+buildscript {
+    
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.13.0'
+        classpath 'com.google.gms:google-services:4.4.4'
+
+        // NOTE: Do not place your application dependencies here; they belong
+        // in the individual module build.gradle files
+    }
+}
+
+apply from: "variables.gradle"
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    // Project-wide fix for a duplicate-class build error (kotlin.streams.jdk8.StreamsKt,
+    // kotlin.text.jdk8.RegexExtensionsJDK8Kt, etc.): some Capacitor/Cordova modules still
+    // pull the old split kotlin-stdlib-jdk7/jdk8 artifacts (1.6.21), which now duplicate
+    // classes already merged into the main kotlin-stdlib (1.8.22, from newer Capacitor
+    // code). Applied to every module (not just :app) so it also covers capacitor-android
+    // and capacitor-cordova-android-plugins resolving their own dependencies. Added Sept
+    // 29 2026 — this supersedes the app-only exclude previously added directly in
+    // app/build.gradle, which wasn't enough on its own.
+    configurations.all {
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+    }
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}
