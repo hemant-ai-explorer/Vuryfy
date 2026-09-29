@@ -24,34 +24,26 @@ export function apiUrl(path: string): string {
 // 2. Still resolves through apiUrl() so the absolute-base-URL behavior
 //    described in that function's own comment above is unchanged.
 // 3. Authorization: Bearer <access_token> — added Sept 29 2026 after
-//    credentials: "include" alone turned out not to be enough. The Supabase
-//    browser client (@supabase/ssr's createBrowserClient, see
-//    lib/supabase/client.ts) stores the session by setting a cookie via
-//    document.cookie on whatever origin the page's JS is currently running
-//    from. Inside the Capacitor app that's https://localhost or
-//    capacitor://localhost — never app.vuryfy.com. A cookie set on one
-//    origin simply doesn't exist on another; that's a browser-level
-//    same-origin rule, not something CORS or SameSite settings can affect
-//    either way. So even with the CORS fix in middleware.ts and
-//    credentials: "include" here, there was never an app.vuryfy.com-scoped
-//    session cookie for the request to send in the first place — confirmed
-//    by the native app's API calls reaching the server fine (no more
-//    "Failed to fetch") but coming back "Not signed in." (the middleware
-//    CORS preflight fix worked; this is the separate, second issue it was
-//    expected to surface next).
+//    credentials: "include" alone turned out not to be enough (the
+//    Supabase session cookie only ever exists on the Capacitor app's own
+//    origin, never on app.vuryfy.com — see lib/supabase/server.ts's
+//    matching comment for the full explanation). lib/supabase/server.ts
+//    reads this header when present and validates the token directly
+//    instead of looking for a session cookie.
 //
-//    The fix is to stop relying on cookies for the native app and instead
-//    send the session's access token explicitly as a standard
-//    Authorization header — a mechanism that works identically regardless
-//    of origin, with no cookie/CORS complications at all.
-//    lib/supabase/server.ts's createClient() reads this header when
-//    present and validates that token directly instead of looking for a
-//    session cookie. The web app never sends this header (API_BASE is ""
-//    there, see below), so its existing cookie-based auth is completely
-//    unchanged.
+//    Debugging note added Sept 29 2026: the very first version of this
+//    (same shape as below, without the console logging) reached the
+//    server correctly but the Authorization header was verifiably absent
+//    on the actual request (confirmed via chrome://inspect Network tab),
+//    even though the session cookie was confirmed present and valid via
+//    `document.cookie` in the same live page at the same time. So the
+//    getSession() lookup below was silently coming back empty for some
+//    still-unknown reason — the logging in the try/catch is there to
+//    pin that down on the next device test rather than guess again.
+//    Remove once the real cause is found and fixed.
 //
-//    Only fetched when API_BASE is set (i.e. the Capacitor build) so the
-//    web app never pays for the extra supabase.auth.getSession() call.
+//    Only attempted when API_BASE is set (i.e. the Capacitor build) so
+//    the web app never pays for the extra getSession() call.
 //
 // Usage: apiFetch("/api/verify", { method: "POST", ... }) instead of
 // fetch("/api/verify", { method: "POST", ... }). Works with a plain path or
@@ -60,15 +52,29 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<Respon
   const headers = new Headers(init?.headers);
 
   if (API_BASE) {
-    // Client-only import path — apiFetch is only ever called from client
-    // components, and this branch only runs in the Capacitor build.
-    const { createClient } = await import("@/lib/supabase/client");
-    const supabase = createClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      headers.set("Authorization", `Bearer ${session.access_token}`);
+    try {
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      const { data, error } = await supabase.auth.getSession();
+      if (error) {
+        console.error("[apiFetch] getSession() returned an error:", error);
+      }
+      console.log(
+        "[apiFetch] getSession() result — has session:",
+        !!data.session,
+        "has access_token:",
+        !!data.session?.access_token,
+        "expires_at:",
+        data.session?.expires_at
+      );
+      if (data.session?.access_token) {
+        headers.set("Authorization", `Bearer ${data.session.access_token}`);
+        console.log("[apiFetch] Authorization header attached for", path);
+      } else {
+        console.warn("[apiFetch] no access_token available — request to", path, "will go out with no Authorization header");
+      }
+    } catch (err) {
+      console.error("[apiFetch] threw while attaching auth token:", err);
     }
   }
 
