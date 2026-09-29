@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useLanguage } from "@/app/providers/language-provider";
 import { SUPPORTED_LANGUAGES, type Language } from "@/lib/translations";
 import { posthog } from "@/app/providers/posthog-provider";
+import { apiUrl } from "@/lib/api-fetch";
 
 // Minimal settings page — Sept 16, 2026. Created specifically to hold the
 // language preference the multilingual rollout needs a persistent home
@@ -69,7 +70,7 @@ export default function SettingsPage() {
     setDeleting(true);
     setDeleteError(null);
     try {
-      const res = await fetch("/api/account/delete", { method: "POST" });
+      const res = await fetch(apiUrl("/api/account/delete"), { method: "POST" });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
         setDeleteError(body?.error ?? "Try Again");

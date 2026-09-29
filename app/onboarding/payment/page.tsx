@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { apiUrl } from "@/lib/api-fetch";
 
 // Stub "choose your plan" step — Sept 19, 2026. Last step of the new
 // signup flow (Name + Language + Phone → OTP → this page — see
@@ -73,7 +74,7 @@ export default function OnboardingPaymentPage() {
     setSelecting(planCode);
     setMessage("");
     try {
-      const res = await fetch("/api/subscribe", {
+      const res = await fetch(apiUrl("/api/subscribe"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan_code: planCode }),

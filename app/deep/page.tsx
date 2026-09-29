@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { apiUrl } from "@/lib/api-fetch";
 
 // Rewritten Sept 14, 2026 to replace the old pre-Supabase-rewrite version
 // of this page. Deliberately mirrors app/verify/page.tsx's shape: Deep
@@ -37,7 +38,7 @@ export default function DeepPage() {
     setLoading(true);
     setError("");
     try {
-      const r = await fetch("/api/deep", {
+      const r = await fetch(apiUrl("/api/deep"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ claim: claim.trim(), input_type: "text" }),

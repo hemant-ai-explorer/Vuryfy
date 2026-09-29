@@ -8,6 +8,7 @@ import { detectPaymentLink, type PaymentLinkInfo } from "@/lib/detect-payment-li
 import { useLanguage } from "@/app/providers/language-provider";
 import { parseJsonResponse } from "@/lib/safe-json";
 import { useElapsedSeconds } from "@/lib/use-elapsed-seconds";
+import { apiUrl } from "@/lib/api-fetch";
 
 // QR Quick Check — the next step in the locked media-type build order
 // (text + link, then QR, then image, then audio/video). The QR image is
@@ -123,7 +124,7 @@ export default function VerifyQrPage() {
           // Its similarMatch result is intentionally ignored here — that's
           // now only ever shown after a paid QC/DI, via
           // app/api/verify-payee|deep-payee's own fresh lookup.
-          fetch("/api/check-payee", {
+          fetch(apiUrl("/api/check-payee"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ upi_id: payment.payeeId, payee_name: payment.payeeName ?? "" }),
@@ -148,7 +149,7 @@ export default function VerifyQrPage() {
     setSubmitError("");
     try {
       const endpoint = mode === "quick" ? "/api/verify" : "/api/deep";
-      const r = await fetch(endpoint, {
+      const r = await fetch(apiUrl(endpoint), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ claim: decoded, input_type: "qr" }),
@@ -179,7 +180,7 @@ export default function VerifyQrPage() {
     setPayeeCheckError("");
     try {
       const endpoint = mode === "quick" ? "/api/verify-payee" : "/api/deep-payee";
-      const r = await fetch(endpoint, {
+      const r = await fetch(apiUrl(endpoint), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

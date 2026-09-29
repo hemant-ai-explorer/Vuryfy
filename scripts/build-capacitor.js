@@ -24,6 +24,13 @@
 // everything afterward — including when the build fails — so a crashed run
 // never leaves the live dev/prod app missing routes or its real config.
 //
+// Also sets NEXT_PUBLIC_API_BASE_URL for this build only, so every
+// fetch(apiUrl("/api/...")) call (see lib/api-fetch.ts) resolves to the real
+// production API instead of a relative path — the exported UI runs from a
+// different origin once it's bundled inside the native shell, so a relative
+// "/api/..." would otherwise hit nothing. The ordinary `next build` used by
+// Vercel never sets this, so the live web app is unaffected.
+//
 // Usage: npm run build:capacitor
 // Output: ./out  (this is capacitor.config.ts's webDir)
 
@@ -32,6 +39,11 @@ const path = require("path");
 const { execSync } = require("child_process");
 
 const root = process.cwd();
+
+// app.vuryfy.com is the real production app domain (confirmed live since
+// Sept 20 2026 — see claude/business-ops-2026-09-20.md). Not yet exercised
+// by a real device build actually talking to it, though.
+const API_BASE_URL = "https://app.vuryfy.com";
 
 // Directories moved out of app/ for the duration of the export build, and
 // restored afterward. Add to this list if another export-incompatible route
@@ -98,7 +110,11 @@ function swapBack() {
 let exitCode = 0;
 swapOut();
 try {
-  execSync("npx next build", { stdio: "inherit", cwd: root });
+  execSync("npx next build", {
+    stdio: "inherit",
+    cwd: root,
+    env: { ...process.env, NEXT_PUBLIC_API_BASE_URL: API_BASE_URL },
+  });
 } catch (err) {
   exitCode = 1;
 } finally {
