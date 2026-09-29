@@ -7,7 +7,7 @@ import { useLanguage } from "@/app/providers/language-provider";
 import { parseJsonResponse } from "@/lib/safe-json";
 import { WHATSAPP_FEATURE_ENABLED } from "@/lib/whatsapp";
 import { useElapsedSeconds } from "@/lib/use-elapsed-seconds";
-import { apiUrl } from "@/lib/api-fetch";
+import { apiFetch } from "@/lib/api-fetch";
 
 // Unified text-entry confirm screen — Sept 16, 2026. Replaces the home
 // screen's old mode-first pair ("Start a Quick Check" / "Start a Deep
@@ -85,7 +85,7 @@ function ClaimForm() {
     setWaLoading(true);
     setWaError("");
     try {
-      const r = await fetch(apiUrl("/api/whatsapp/link-code"), { method: "POST" });
+      const r = await apiFetch("/api/whatsapp/link-code", { method: "POST" });
       const d = await parseJsonResponse(r);
       if (!r.ok) throw new Error(d.error || "Couldn't create a WhatsApp link.");
       setWaCode({ code: d.code, waLink: d.wa_link });
@@ -105,7 +105,7 @@ function ClaimForm() {
   useEffect(() => {
     if (!whatsappId) return;
     setLoadingWaSubmission(true);
-    fetch(apiUrl(`/api/whatsapp/pending/${whatsappId}`))
+    apiFetch(`/api/whatsapp/pending/${whatsappId}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d?.input_type === "text" && d.claim_text) setClaim(d.claim_text);
@@ -120,7 +120,7 @@ function ClaimForm() {
     setError("");
     try {
       const endpoint = mode === "quick" ? "/api/verify" : "/api/deep";
-      const r = await fetch(apiUrl(endpoint), {
+      const r = await apiFetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ claim: claim.trim(), input_type: "text" }),

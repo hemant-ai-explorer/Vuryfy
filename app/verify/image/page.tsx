@@ -8,7 +8,7 @@ import { prepareImageForUpload, type PreparedImage } from "@/lib/prepare-image-u
 import { useLanguage } from "@/app/providers/language-provider";
 import { parseJsonResponse } from "@/lib/safe-json";
 import { useElapsedSeconds } from "@/lib/use-elapsed-seconds";
-import { apiUrl } from "@/lib/api-fetch";
+import { apiFetch } from "@/lib/api-fetch";
 
 // Image input — the next step in the locked media-type build order (text +
 // link -> QR -> image -> audio/video). Offers up to two independent
@@ -132,7 +132,7 @@ function ImageForm() {
   useEffect(() => {
     if (!whatsappId) return;
     setLoadingWaImage(true);
-    fetch(apiUrl(`/api/whatsapp/pending/${whatsappId}/image`))
+    apiFetch(`/api/whatsapp/pending/${whatsappId}/image`)
       .then((r) => {
         if (!r.ok) throw new Error("not found");
         return r.blob();
@@ -152,7 +152,7 @@ function ImageForm() {
     setSubmitError("");
     try {
       const endpoint = mode === "quick" ? "/api/verify-image-combined" : "/api/deep-image-combined";
-      const r = await fetch(apiUrl(endpoint), {
+      const r = await apiFetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -179,7 +179,7 @@ function ImageForm() {
     setSubmitError("");
     try {
       const endpoint = mode === "quick" ? "/api/verify-image" : "/api/deep-image";
-      const r = await fetch(apiUrl(endpoint), {
+      const r = await apiFetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

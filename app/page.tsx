@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useLanguage } from "@/app/providers/language-provider";
 import { WHATSAPP_FEATURE_ENABLED } from "@/lib/whatsapp";
-import { apiUrl } from "@/lib/api-fetch";
+import { apiFetch } from "@/lib/api-fetch";
 
 type Credits = { quick_checks: number; deep_investigations: number; total: number };
 type Subscription = {
@@ -54,7 +54,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!signedIn) return;
-    fetch(apiUrl("/api/me"))
+    apiFetch("/api/me")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (!d) return;
@@ -65,7 +65,7 @@ export default function Home() {
     // Feature paused — see lib/whatsapp.ts's WHATSAPP_FEATURE_ENABLED
     // comment. Skip the check entirely rather than fetch-then-hide.
     if (WHATSAPP_FEATURE_ENABLED) {
-      fetch(apiUrl("/api/whatsapp/pending"))
+      apiFetch("/api/whatsapp/pending")
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => setPendingWa(d?.pending ?? null))
         .catch(() => {});

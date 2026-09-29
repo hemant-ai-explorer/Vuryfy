@@ -1,7 +1,7 @@
 "use client";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { translate, isSupportedLanguage, type Language } from "@/lib/translations";
-import { apiUrl } from "@/lib/api-fetch";
+import { apiFetch } from "@/lib/api-fetch";
 
 // Client-side language context — Phase 1 of the multilingual rollout (see
 // lib/translations.ts's header for the full rationale and current scope).
@@ -68,7 +68,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     const maxAttempts = 3;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        const res = await fetch(apiUrl("/api/preferences"));
+        const res = await apiFetch("/api/preferences");
         if (res.ok) {
           const data = await res.json();
           if (isSupportedLanguage(data.language)) {
@@ -113,7 +113,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     setLanguageState(next);
     setHasPreference(true);
     try {
-      await fetch(apiUrl("/api/preferences"), {
+      await apiFetch("/api/preferences", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ language: next }),

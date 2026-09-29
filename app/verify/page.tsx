@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { apiUrl } from "@/lib/api-fetch";
+import { apiFetch } from "@/lib/api-fetch";
 
 export default function VerifyPage() {
   const router = useRouter();
@@ -23,7 +23,7 @@ export default function VerifyPage() {
     setLoading(true);
     setError("");
     try {
-      const r = await fetch(apiUrl("/api/verify"), {
+      const r = await apiFetch("/api/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ claim: claim.trim(), input_type: "text" }),

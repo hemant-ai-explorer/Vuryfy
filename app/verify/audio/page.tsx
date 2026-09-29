@@ -7,7 +7,7 @@ import { prepareAudioForUpload, type PreparedAudio } from "@/lib/prepare-audio-u
 import { useLanguage } from "@/app/providers/language-provider";
 import { parseJsonResponse } from "@/lib/safe-json";
 import { useElapsedSeconds } from "@/lib/use-elapsed-seconds";
-import { apiUrl } from "@/lib/api-fetch";
+import { apiFetch } from "@/lib/api-fetch";
 
 // Audio input — first half of the last step in the locked media-type build
 // order (text + link -> QR -> image -> audio/video), audio shipping ahead
@@ -71,7 +71,7 @@ export default function VerifyAudioPage() {
       const audio = await prepareAudioForUpload(file);
       setPrepared(audio);
 
-      const r = await fetch(apiUrl("/api/transcribe-audio"), {
+      const r = await apiFetch("/api/transcribe-audio", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ audio_base64: audio.base64, mime_type: audio.mimeType }),
@@ -99,7 +99,7 @@ export default function VerifyAudioPage() {
     setSubmitError("");
     try {
       const endpoint = mode === "quick" ? "/api/verify-audio-combined" : "/api/deep-audio-combined";
-      const r = await fetch(apiUrl(endpoint), {
+      const r = await apiFetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -128,7 +128,7 @@ export default function VerifyAudioPage() {
     setSubmitError("");
     try {
       const endpoint = mode === "quick" ? "/api/verify-audio" : "/api/deep-audio";
-      const r = await fetch(apiUrl(endpoint), {
+      const r = await apiFetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

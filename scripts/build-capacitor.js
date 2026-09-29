@@ -41,9 +41,19 @@ const { execSync } = require("child_process");
 const root = process.cwd();
 
 // app.vuryfy.com is the real production app domain (confirmed live since
-// Sept 20 2026 — see claude/business-ops-2026-09-20.md). Not yet exercised
-// by a real device build actually talking to it, though.
-const API_BASE_URL = "https://app.vuryfy.com";
+// Sept 20 2026 — see claude/business-ops-2026-09-20.md), and is the default
+// every normal `npm run build:capacitor` uses. Override it for a one-off
+// build against the `test` branch's Vercel preview instead — e.g. to check
+// a server-side change (an API route, middleware.ts) against staging
+// before merging it to main and hitting real production — with:
+//   $env:CAPACITOR_API_BASE_URL = "https://vuryfy-git-test-ai-explorers1.vercel.app"
+//   npm run build:capacitor
+// Added Sept 29 2026 after a CORS fix in middleware.ts (see
+// claude/roadmap-notes.md, "Capacitor build — kickoff") had to actually be
+// pushed and deployed before the native app could pick it up — a build
+// only ever bundles the CLIENT code locally; server-side files like
+// middleware.ts run wherever this URL points, not on the device at all.
+const API_BASE_URL = process.env.CAPACITOR_API_BASE_URL || "https://app.vuryfy.com";
 
 // Directories moved out of app/ for the duration of the export build, and
 // restored afterward. Add to this list if another export-incompatible route
