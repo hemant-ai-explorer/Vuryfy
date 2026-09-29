@@ -214,6 +214,15 @@ function ImageForm() {
   // Sept 20, 2026: "still working" progress indicator for Deep Investigation
   // — see lib/use-elapsed-seconds.ts.
   const deepElapsed = useElapsedSeconds(isDeepCombined);
+  // Sept 29, 2026: same "still working" indicator, now also on Quick Check.
+  // A real Quick Check here isn't actually slow (server logs showed ~7s for
+  // a successful run — content-safety scan + a search + two parallel AI
+  // calls + a few DB writes), but with no feedback at all a static
+  // "Checking…" label made that ordinary wait feel much longer than it was
+  // (a real user report — "again the qc took a long time to process it").
+  // Deep Investigation already solved this with a running counter; Quick
+  // Check just never got the same treatment.
+  const quickElapsed = useElapsedSeconds(isCheckingCombined);
 
   return (
     <main className="shell narrow">
@@ -293,7 +302,7 @@ function ImageForm() {
                 onClick={() => (ocrText ? submitCombined("quick") : submitVision("quick"))}
                 disabled={anySubmitting}
               >
-                {isCheckingCombined ? t("claim.checking") : t("claim.quickCheck")}
+                {isCheckingCombined ? `${t("claim.checking")} (${quickElapsed}s)` : t("claim.quickCheck")}
               </button>
               <button
                 onClick={() => (ocrText ? submitCombined("deep") : submitVision("deep"))}
