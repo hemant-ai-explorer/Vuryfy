@@ -55,6 +55,28 @@ const root = process.cwd();
 // middleware.ts run wherever this URL points, not on the device at all.
 const API_BASE_URL = process.env.CAPACITOR_API_BASE_URL || "https://app.vuryfy.com";
 
+// Supabase project credentials for this build — added Sept 29 2026 after a
+// mismatch bug: NEXT_PUBLIC_SUPABASE_URL/ANON_KEY are ordinarily supplied by
+// .env.local (used for everyday local dev, which on this machine points at
+// the `vuryfy-test` Supabase project), but that file has no idea whether
+// *this* build is meant to talk to production or test — it just always
+// contributes whatever it currently contains. A build that left it alone
+// while pointing API_BASE_URL at production created a broken combination:
+// sign-in went to the test Supabase project while /api/* calls (and their
+// server-side token validation) went to the production project, so every
+// login looked valid to the client but came back "Not signed in." from the
+// server. Fixed the same way as API_BASE_URL above — default to the real
+// production project, and require an explicit override (mirroring
+// CAPACITOR_API_BASE_URL) to build against test instead:
+//   $env:CAPACITOR_API_BASE_URL = "https://vuryfy-git-test-ai-explorers1.vercel.app"
+//   $env:CAPACITOR_SUPABASE_URL = "https://tituotrsxpxkhdrsyvvd.supabase.co"
+//   $env:CAPACITOR_SUPABASE_ANON_KEY = "sb_publishable_PMcRmH0ddlnWTBUV912YJw_XLTJD381"
+//   npm run build:capacitor
+const SUPABASE_URL =
+  process.env.CAPACITOR_SUPABASE_URL || "https://bzzenbguxofeirknzxld.supabase.co";
+const SUPABASE_ANON_KEY =
+  process.env.CAPACITOR_SUPABASE_ANON_KEY || "sb_publishable_ZFgxN8LC44Xy6kg3s2AJ8Q_uU6KUIo6";
+
 // Directories moved out of app/ for the duration of the export build, and
 // restored afterward. Add to this list if another export-incompatible route
 // shows up later (e.g. a future dynamic page with no generateStaticParams).
@@ -123,7 +145,12 @@ try {
   execSync("npx next build", {
     stdio: "inherit",
     cwd: root,
-    env: { ...process.env, NEXT_PUBLIC_API_BASE_URL: API_BASE_URL },
+    env: {
+      ...process.env,
+      NEXT_PUBLIC_API_BASE_URL: API_BASE_URL,
+      NEXT_PUBLIC_SUPABASE_URL: SUPABASE_URL,
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: SUPABASE_ANON_KEY,
+    },
   });
 } catch (err) {
   exitCode = 1;
