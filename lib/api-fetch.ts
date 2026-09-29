@@ -16,23 +16,61 @@ export function apiUrl(path: string): string {
   return `${API_BASE}${path}`;
 }
 
-// apiFetch() is what every call site actually uses. Two things it adds
+// apiFetch() is what every call site actually uses. Three things it adds
 // beyond a plain fetch(apiUrl(path)):
 //
 // 1. credentials: "include" — on the web app this is a no-op (same-origin
-//    requests send cookies by default regardless), but from inside the
-//    Capacitor app the request is genuinely cross-origin, and a fetch()
-//    only attaches cookies to a cross-origin request when explicitly told
-//    to via `credentials: "include"`. Without this, the Supabase session
-//    cookie would never be sent at all, even once CORS itself is fixed
-//    (see middleware.ts's CORS block, added the same day for the matching
-//    server-side half of this).
+//    requests send cookies by default regardless).
 // 2. Still resolves through apiUrl() so the absolute-base-URL behavior
 //    described in that function's own comment above is unchanged.
+// 3. Authorization: Bearer <access_token> — added Sept 29 2026 after
+//    credentials: "include" alone turned out not to be enough. The Supabase
+//    browser client (@supabase/ssr's createBrowserClient, see
+//    lib/supabase/client.ts) stores the session by setting a cookie via
+//    document.cookie on whatever origin the page's JS is currently running
+//    from. Inside the Capacitor app that's https://localhost or
+//    capacitor://localhost — never app.vuryfy.com. A cookie set on one
+//    origin simply doesn't exist on another; that's a browser-level
+//    same-origin rule, not something CORS or SameSite settings can affect
+//    either way. So even with the CORS fix in middleware.ts and
+//    credentials: "include" here, there was never an app.vuryfy.com-scoped
+//    session cookie for the request to send in the first place — confirmed
+//    by the native app's API calls reaching the server fine (no more
+//    "Failed to fetch") but coming back "Not signed in." (the middleware
+//    CORS preflight fix worked; this is the separate, second issue it was
+//    expected to surface next).
+//
+//    The fix is to stop relying on cookies for the native app and instead
+//    send the session's access token explicitly as a standard
+//    Authorization header — a mechanism that works identically regardless
+//    of origin, with no cookie/CORS complications at all.
+//    lib/supabase/server.ts's createClient() reads this header when
+//    present and validates that token directly instead of looking for a
+//    session cookie. The web app never sends this header (API_BASE is ""
+//    there, see below), so its existing cookie-based auth is completely
+//    unchanged.
+//
+//    Only fetched when API_BASE is set (i.e. the Capacitor build) so the
+//    web app never pays for the extra supabase.auth.getSession() call.
 //
 // Usage: apiFetch("/api/verify", { method: "POST", ... }) instead of
 // fetch("/api/verify", { method: "POST", ... }). Works with a plain path or
 // a template literal (e.g. apiFetch(`/api/verifications/${id}`)).
-export function apiFetch(path: string, init?: RequestInit): Promise<Response> {
-  return fetch(apiUrl(path), { credentials: "include", ...init });
+export async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+  const headers = new Headers(init?.headers);
+
+  if (API_BASE) {
+    // Client-only import path — apiFetch is only ever called from client
+    // components, and this branch only runs in the Capacitor build.
+    const { createClient } = await import("@/lib/supabase/client");
+    const supabase = createClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      headers.set("Authorization", `Bearer ${session.access_token}`);
+    }
+  }
+
+  return fetch(apiUrl(path), { credentials: "include", ...init, headers });
 }
