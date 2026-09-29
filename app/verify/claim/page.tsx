@@ -70,6 +70,10 @@ function ClaimForm() {
   // Investigation — see lib/use-elapsed-seconds.ts's header. A real video DI
   // took ~50s with nothing but a static "Investigating…" label to look at.
   const deepElapsed = useElapsedSeconds(submitting === "deep");
+  // Sept 29, 2026: same "still working" indicator, now also on Quick Check
+  // (see app/verify/image/page.tsx's identical addition for the rationale —
+  // a real user report that Quick Check felt stuck with no feedback at all).
+  const quickElapsed = useElapsedSeconds(submitting === "quick");
   // WhatsApp media-first flow (Part 13 rework, Sept 18, 2026) — see
   // supabase/migrations/0017_whatsapp_submissions.sql. A linked phone can
   // forward text/a link OR a photo (app/verify/image/page.tsx handles the
@@ -173,7 +177,7 @@ function ClaimForm() {
             verify/qr, and result/page.tsx's payment_request block). */}
         <div className="result-actions">
           <button onClick={() => submit("quick")} disabled={!!submitting || claim.trim().length < 5}>
-            {submitting === "quick" ? t("claim.checking") : t("claim.quickCheck")}
+            {submitting === "quick" ? `${t("claim.checking")} (${quickElapsed}s)` : t("claim.quickCheck")}
           </button>
           <button onClick={() => submit("deep")} disabled={!!submitting || claim.trim().length < 5}>
             {submitting === "deep" ? `${t("claim.investigating")} (${deepElapsed}s)` : t("claim.deepInvestigation")}

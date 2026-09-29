@@ -163,6 +163,10 @@ export default function VerifyAudioPage() {
   // Sept 20, 2026: "still working" progress indicator for Deep Investigation
   // — see lib/use-elapsed-seconds.ts.
   const deepElapsed = useElapsedSeconds(submitting === "combined-deep" || submitting === "audio-deep");
+  // Sept 29, 2026: same "still working" indicator, now also on Quick Check
+  // (see app/verify/image/page.tsx's identical addition for the rationale —
+  // a real user report that Quick Check felt stuck with no feedback at all).
+  const quickElapsed = useElapsedSeconds(submitting === "combined-quick" || submitting === "audio-quick");
 
   return (
     <main className="shell narrow">
@@ -223,7 +227,9 @@ export default function VerifyAudioPage() {
                 isn't part of that pair. */}
             <div className="result-actions">
               <button onClick={() => submitCombined("quick")} disabled={anySubmitting}>
-                {submitting === "combined-quick" ? t("claim.checking") : t("claim.quickCheck")}
+                {submitting === "combined-quick"
+                  ? `${t("claim.checking")} (${quickElapsed}s)`
+                  : t("claim.quickCheck")}
               </button>
               <button onClick={() => submitCombined("deep")} disabled={anySubmitting}>
                 {submitting === "combined-deep"
@@ -255,7 +261,9 @@ export default function VerifyAudioPage() {
                 on the combined-transcript block. */}
             <div className="result-actions">
               <button onClick={() => submitAudio("quick")} disabled={anySubmitting}>
-                {submitting === "audio-quick" ? t("claim.checking") : t("claim.quickCheck")}
+                {submitting === "audio-quick"
+                  ? `${t("claim.checking")} (${quickElapsed}s)`
+                  : t("claim.quickCheck")}
               </button>
               <button onClick={() => submitAudio("deep")} disabled={anySubmitting}>
                 {submitting === "audio-deep"

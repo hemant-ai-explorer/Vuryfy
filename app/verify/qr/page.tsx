@@ -96,6 +96,14 @@ export default function VerifyQrPage() {
   // Investigation buttons on this screen — see lib/use-elapsed-seconds.ts.
   const deepElapsed = useElapsedSeconds(submitting === "deep");
   const payeeDeepElapsed = useElapsedSeconds(payeeChecking === "deep");
+  // Sept 29, 2026: same "still working" indicator, now also on both Quick
+  // Check buttons (see app/verify/image/page.tsx's identical addition for
+  // the rationale — a real user report that Quick Check felt stuck with no
+  // feedback at all). "quick-name" (the registered-name variant) shares
+  // payeeQuickElapsed with plain "quick" since only one payee button can be
+  // active at a time.
+  const quickElapsed = useElapsedSeconds(submitting === "quick");
+  const payeeQuickElapsed = useElapsedSeconds(payeeChecking === "quick" || payeeChecking === "quick-name");
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -289,13 +297,15 @@ export default function VerifyQrPage() {
                 <div className="result-actions payee-actions">
                   <div className="payee-action">
                     <button onClick={() => investigatePayee("quick")} disabled={!!payeeChecking}>
-                      {payeeChecking === "quick" ? t("claim.checking") : t("claim.quickCheck")}
+                      {payeeChecking === "quick" ? `${t("claim.checking")} (${payeeQuickElapsed}s)` : t("claim.quickCheck")}
                     </button>
                     <p className="hint">{t("qr.quickCheckCaption")}</p>
                   </div>
                   <div className="payee-action">
                     <button onClick={() => investigatePayee("quick", true)} disabled={!!payeeChecking}>
-                      {payeeChecking === "quick-name" ? t("claim.checking") : t("qr.quickCheckWithNameLabel")}
+                      {payeeChecking === "quick-name"
+                        ? `${t("claim.checking")} (${payeeQuickElapsed}s)`
+                        : t("qr.quickCheckWithNameLabel")}
                     </button>
                     <p className="hint">{t("qr.quickCheckWithNameCaption")}</p>
                   </div>
@@ -337,7 +347,7 @@ export default function VerifyQrPage() {
                 part of that pair. */}
             <div className="result-actions">
               <button onClick={() => confirm("quick")} disabled={!!submitting}>
-                {submitting === "quick" ? t("claim.checking") : t("claim.quickCheck")}
+                {submitting === "quick" ? `${t("claim.checking")} (${quickElapsed}s)` : t("claim.quickCheck")}
               </button>
               <button onClick={() => confirm("deep")} disabled={!!submitting}>
                 {submitting === "deep" ? `${t("claim.investigating")} (${deepElapsed}s)` : t("claim.deepInvestigation")}
