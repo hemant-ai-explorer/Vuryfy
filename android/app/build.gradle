@@ -1,6 +1,16 @@
 apply plugin: 'com.android.application'
 
 android {
+    // Fixes a duplicate-class build error (kotlin.streams.jdk8.StreamsKt,
+    // kotlin.text.jdk8.RegexExtensionsJDK8Kt, etc.) caused by the older
+    // Cordova plugins bundled with Capacitor still pulling in the separate
+    // kotlin-stdlib-jdk7/jdk8 artifacts, which now duplicate classes already
+    // merged into the main kotlin-stdlib. Added Sept 29 2026.
+    configurations.all {
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+    }
+
     namespace = "com.vuryfy.app"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {

@@ -31,16 +31,16 @@ export function apiUrl(path: string): string {
 //    reads this header when present and validates the token directly
 //    instead of looking for a session cookie.
 //
-//    Debugging note added Sept 29 2026: the very first version of this
-//    (same shape as below, without the console logging) reached the
-//    server correctly but the Authorization header was verifiably absent
-//    on the actual request (confirmed via chrome://inspect Network tab),
-//    even though the session cookie was confirmed present and valid via
-//    `document.cookie` in the same live page at the same time. So the
-//    getSession() lookup below was silently coming back empty for some
-//    still-unknown reason — the logging in the try/catch is there to
-//    pin that down on the next device test rather than guess again.
-//    Remove once the real cause is found and fixed.
+//    TEMPORARY DEBUG LOGGING (Sept 29 2026): a first attempt at this
+//    (same shape, no console calls) reached the server correctly but the
+//    Authorization header was verifiably absent on the actual request
+//    (confirmed via chrome://inspect Network tab), even though the
+//    session cookie was confirmed present and valid via `document.cookie`
+//    in the same live page at the same time. The logging below is there
+//    to pin down why getSession() isn't finding it — DO NOT REVERT OR
+//    "CLEAN UP" THIS FILE, this is intentional and actively being tested
+//    on-device. Safe to remove once the real cause is found and fixed —
+//    ask Claude before removing it if unsure.
 //
 //    Only attempted when API_BASE is set (i.e. the Capacitor build) so
 //    the web app never pays for the extra getSession() call.
