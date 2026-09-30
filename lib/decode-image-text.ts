@@ -1,3 +1,5 @@
+import { apiFetch } from "@/lib/api-fetch";
+
 // OCR text-in-image extraction — thin client wrapper around the server-side
 // Vision call (lib/detect-text.ts, via app/api/ocr-image/route.ts).
 //
@@ -23,9 +25,22 @@
 // Still fails open exactly like before: any failure (network, server
 // error, no text found) returns "" — callers treat empty string as "no
 // text", the same contract this function has always had.
+//
+// Bug fixed Sept 30 2026: this called a plain fetch("/api/ocr-image", ...)
+// instead of apiFetch(...) — a relative path that's fine on the web app
+// (same-origin) but resolves against the Capacitor app's own bundled-local
+// origin on the native app, which has no /api/* routes at all (they're
+// excluded from the static export — see scripts/build-capacitor.js). On
+// native this silently failed every time and, because this function is
+// deliberately fail-open, nothing ever surfaced the error: OCR just always
+// came back empty, so every photo with printed text quietly fell through to
+// the vision-only "is this image manipulated" check instead of the combined
+// OCR-fact-check path a user would expect and get on the web app — caught
+// when the exact same photo gave two different results (verdict AND check
+// type) on web vs. the native app.
 export async function extractTextFromImage(imageBase64: string, mimeType: string): Promise<string> {
   try {
-    const res = await fetch("/api/ocr-image", {
+    const res = await apiFetch("/api/ocr-image", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ image_base64: imageBase64, mime_type: mimeType }),

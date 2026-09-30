@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { apiFetch } from "@/lib/api-fetch";
 
 // Client-side upload for video input — reworked Sept 15, 2026 after a real
 // user request for 3-5+ minute video support, which the original "read
@@ -44,7 +45,16 @@ export async function uploadVideoToStorage(file: File, supabase: SupabaseClient)
   }
   const mimeType = file.type || "video/mp4";
 
-  const tokenResponse = await fetch("/api/video-upload-url", {
+  // Bug fixed Sept 30 2026: this called a plain fetch("/api/video-upload-url")
+  // instead of apiFetch(...) — a relative path that's fine on the web app
+  // (same-origin) but resolves against the Capacitor app's own bundled-local
+  // origin on the native app, which has no /api/* routes at all (see
+  // scripts/build-capacitor.js). Unlike lib/decode-image-text.ts's identical
+  // mistake, this one fails loud (throws VideoUploadError below), so on the
+  // native app every video Quick Check/Deep Investigation would have failed
+  // immediately at the upload step. Found and fixed alongside that OCR bug
+  // once the same missing-apiFetch pattern was searched for across the repo.
+  const tokenResponse = await apiFetch("/api/video-upload-url", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ mime_type: mimeType }),
