@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { apiFetch } from "@/lib/api-fetch";
 
 type Item = {
   id: string;
@@ -41,9 +42,20 @@ export default function Saved() {
         router.replace("/login");
         return;
       }
-      fetch("/api/verifications")
+      // Bug fixed Sept 30 2026: this called a plain fetch("/api/verifications")
+      // instead of apiFetch(...) — a relative path that's fine on the web app
+      // (same-origin) but resolves against the Capacitor app's own
+      // bundled-local origin on the native app, which has no /api/* routes at
+      // all (see scripts/build-capacitor.js). On native this silently failed
+      // every time, and since nothing here distinguished "no history yet"
+      // from "couldn't load history", the native app always showed the empty
+      // "Nothing here yet." state regardless of how many checks a user had
+      // actually run. Found and fixed alongside the identical OCR and video-
+      // upload mistakes once this pattern was searched for across the repo.
+      apiFetch("/api/verifications")
         .then((r) => (r.ok ? r.json() : { items: [] }))
         .then((d) => setItems(d.items || []))
+        .catch(() => setItems([]))
         .finally(() => setLoading(false));
     });
   }, [router, supabase]);
