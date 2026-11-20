@@ -5,7 +5,8 @@
 .empty,.saved-item{border-top:1px solid rgba(255,255,255,.12);padding:24px 0}.saved-item p{font-size:18px;line-height:1.5;margin:8px 0}.saved-item small{opacity:.65}.row-actions{display:flex;gap:10px;margin-top:16px}
 
 .home-actions{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
-.secondary-link{display:inline-flex;align-items:center;justify-content:center;height:52px;padding:0 24px;border-radius:12px;background:#17191c;color:#fff;text-decoration:none;font-weight:600}
+.secondary-link{display:inline-flex;align-items:center;gap:8px;justify-content:center;height:52px;padding:0 24px;border-radius:12px;background:#17191c;color:#fff;text-decoration:none;font-weight:600}
+.free-badge{padding:2px 8px;border-radius:20px;background:rgba(255,255,255,.18);font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase}
 .balance-card{display:flex;gap:0;margin-top:36px;border:1px solid #e5e7ea;background:#fff;border-radius:18px;overflow:hidden}
 .balance-card div{min-width:110px;padding:15px 20px;display:grid;gap:4px;border-right:1px solid #e5e7ea}
 .balance-card div:last-child{border-right:0}.balance-card span{font-size:11px;color:#747a81;text-transform:uppercase;letter-spacing:.1em}.balance-card strong{font-size:22px}

@@ -161,6 +161,21 @@ export default function Home() {
           <Link className="secondary-link" href="/verify/video">
             {t("home.verifyVideo")}
           </Link>
+          {/* Nov 20, 2026: SEBI intermediary-registration check — the only
+              button here that doesn't draw from Quick Check/Deep
+              Investigation credits, so it carries a small "Free" badge
+              rather than looking identical to the credited checks above. */}
+          <Link className="secondary-link" href="/verify/sebi">
+            {t("home.verifySebi")}
+            <span className="free-badge">{t("home.free")}</span>
+          </Link>
+          {/* Nov 20, 2026: digital-arrest / scary-call guided checklist —
+              same free-badge treatment as the SEBI button above, same
+              reasoning (doesn't draw from credits). */}
+          <Link className="secondary-link" href="/verify/digital-arrest">
+            {t("home.verifyDigitalArrest")}
+            <span className="free-badge">{t("home.free")}</span>
+          </Link>
         </div>
         <div className="balance-card">
           <div>

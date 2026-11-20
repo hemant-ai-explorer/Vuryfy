@@ -25,11 +25,62 @@ export default function SettingsPage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  // Trusted contact for the digital-arrest Scam SOS feature — Nov 20,
+  // 2026 (see app/verify/digital-arrest/page.tsx and
+  // supabase/migrations/0025_trusted_contact.sql). Set up ahead of time
+  // here rather than typed in mid-scam-call, since the whole point is a
+  // one-tap message while the user is under pressure. formattedPhone
+  // holds the raw digits typed into the input (not yet normalized — that
+  // happens server-side on save); the saved, normalized value only comes
+  // back from GET /api/preferences.
+  const [contactName, setContactName] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [contactLoaded, setContactLoaded] = useState(false);
+  const [contactSaving, setContactSaving] = useState(false);
+  const [contactSaved, setContactSaved] = useState(false);
+  const [contactError, setContactError] = useState("");
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) router.replace("/login");
     });
   }, [router, supabase]);
+
+  useEffect(() => {
+    apiFetch("/api/preferences")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        setContactName(d.trusted_contact_name ?? "");
+        setContactPhone(d.trusted_contact_phone ?? "");
+      })
+      .catch(() => {})
+      .finally(() => setContactLoaded(true));
+  }, []);
+
+  async function saveTrustedContact() {
+    setContactSaving(true);
+    setContactSaved(false);
+    setContactError("");
+    try {
+      const r = await apiFetch("/api/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          trusted_contact_name: contactName.trim(),
+          trusted_contact_phone: contactPhone.trim(),
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Could not save.");
+      setContactPhone(d.trusted_contact_phone ?? "");
+      setContactSaved(true);
+    } catch (e: any) {
+      setContactError(e.message);
+    } finally {
+      setContactSaving(false);
+    }
+  }
 
   async function pick(next: Language) {
     if (next === language) return;
@@ -132,6 +183,47 @@ export default function SettingsPage() {
           </select>
           {saving && <p className="hint">{t("settings.saving")}</p>}
           {saved && !saving && <p className="hint">{t("settings.saved")}</p>}
+        </div>
+
+        {/* Trusted contact for Scam SOS — Nov 20, 2026. English-only for
+            now, same flagged i18n gap as the SEBI check and the WhatsApp
+            UI (newer, smaller features shipping ahead of the full
+            9-language pass). Deliberately plain name+phone inputs, no
+            contact-picker integration — a browser contact picker needs
+            HTTPS + user gesture + browser support that isn't guaranteed
+            here, and typing two fields once in Settings is a low enough
+            bar for a one-time setup step. */}
+        <div className="panel" style={{ width: "100%", marginTop: 20 }}>
+          <h2>Trusted contact for Scam SOS</h2>
+          <p className="sub" style={{ margin: "0 0 18px", fontSize: 15 }}>
+            If you&apos;re ever on a scary call pressuring you for money or secrecy, the digital-arrest
+            check can message this person in one tap. Set it up now, not mid-call.
+          </p>
+          <input
+            value={contactName}
+            onChange={(e) => setContactName(e.target.value)}
+            placeholder="Name (e.g. a family member or close friend)"
+            maxLength={120}
+            disabled={!contactLoaded}
+            style={{ marginBottom: 10 }}
+          />
+          <input
+            value={contactPhone}
+            onChange={(e) => setContactPhone(e.target.value)}
+            placeholder="Their phone number (e.g. 98XXXXXXXX)"
+            maxLength={20}
+            disabled={!contactLoaded}
+          />
+          <div className="actions" style={{ marginTop: 14 }}>
+            <span />
+            <button onClick={saveTrustedContact} disabled={!contactLoaded || contactSaving}>
+              {contactSaving ? "Saving…" : "Save contact"}
+            </button>
+          </div>
+          {contactError && <p className="error">{contactError}</p>}
+          {contactSaved && !contactSaving && !contactError && (
+            <p className="hint">Saved — you can clear both fields and save again to remove it.</p>
+          )}
         </div>
 
         <p className="hint" style={{ marginTop: 28 }}>
