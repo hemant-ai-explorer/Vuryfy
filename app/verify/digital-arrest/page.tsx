@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { apiFetch } from "@/lib/api-fetch";
@@ -82,6 +82,15 @@ export default function DigitalArrestCheckPage() {
   const [contactName, setContactName] = useState<string | null>(null);
   const [contactPhone, setContactPhone] = useState<string | null>(null);
   const [isIOS, setIsIOS] = useState(false);
+  // Nov 20, 2026: the "what to do" section (toolkit + SOS) renders below
+  // the full six-question checklist, which stays visible even once
+  // showHelp flips true. Without this, clicking "Skip straight to what to
+  // do" from the top of the page changed nothing in the viewport — the
+  // new section landed off-screen below ~6 question cards, so it looked
+  // like the click did nothing. Scrolling the help section into view
+  // whenever it appears (skip link OR answering any question "Yes") fixes
+  // that for both paths.
+  const helpRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -113,6 +122,12 @@ export default function DigitalArrestCheckPage() {
   const allAnswered = RED_FLAGS.every((f) => answers[f.id]);
   const showHelp = skipToHelp || matched.length > 0;
   const showCalm = !showHelp && allAnswered;
+
+  useEffect(() => {
+    if (showHelp) {
+      helpRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [showHelp]);
 
   const SOS_MESSAGE =
     'I think I might be on a scam call right now (possibly a fake police/CBI "digital arrest" call) and could use you on the phone — can you call me?';
@@ -188,7 +203,7 @@ export default function DigitalArrestCheckPage() {
         </div>
 
         {showHelp && (
-          <div className="scam-warning" style={{ marginTop: 28 }}>
+          <div ref={helpRef} className="scam-warning" style={{ marginTop: 28 }}>
             <p
               style={{
                 margin: "0 0 10px",
