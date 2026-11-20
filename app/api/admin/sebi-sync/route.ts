@@ -47,6 +47,15 @@ export async function POST(request: Request) {
     try {
       const result = await syncSebiCategory(admin, categoryKey);
       results.push(result);
+      // A category can "succeed" (no thrown error) while still dropping
+      // rows — e.g. one or more upsert batches failed partway through.
+      // Surface that here too, not just in server logs, so a caller can't
+      // mistake ok:true for "every record landed."
+      if (result.failedBatches > 0) {
+        errors.push(
+          `${categoryKey}: ${result.failedBatches} batch(es) failed to upsert — only ${result.upserted}/${result.totalRecords} records saved. Check server logs for the underlying Postgres error.`
+        );
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`[sebi-sync] category "${categoryKey}" failed:`, err);

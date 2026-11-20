@@ -180,6 +180,8 @@ export interface SyncResult {
   totalRecords: number;
   pagesFetched: number;
   upserted: number;
+  duplicatesDropped: number;
+  failedBatches: number;
 }
 
 // Pages through one full SEBI category and upserts every record into
@@ -204,7 +206,7 @@ export async function syncSebiCategory(
 
   if (noRecords) {
     console.error(`[sebi-check] sync for ${label}: SEBI returned "No record(s) available" for an unfiltered category query — this is almost certainly a sign SEBI's page/params changed, not that the category is genuinely empty. Aborting this category's sync without touching existing cached rows.`);
-    return { category: label, totalRecords: 0, pagesFetched: 0, upserted: 0 };
+    return { category: label, totalRecords: 0, pagesFetched: 0, upserted: 0, duplicatesDropped: 0, failedBatches: 0 };
   }
 
   if (!totalMatch) {
@@ -235,8 +237,30 @@ export async function syncSebiCategory(
     pagesFetched++;
   }
 
+  // SEBI's own paginated results can repeat the same reg_no more than once
+  // (confirmed live Nov 20, 2026 — a real sync run started hitting this on
+  // every batch past a certain point, dropping ~45% of two categories'
+  // records silently). Postgres's upsert rejects a batch outright if two
+  // rows in the same command target the same ON CONFLICT key ('ON CONFLICT
+  // DO UPDATE command cannot affect row a second time', code 21000) — so
+  // dedupe by reg_no BEFORE chunking into batches, not per-batch, since a
+  // duplicate pair can straddle a batch boundary. Last occurrence wins;
+  // true duplicates have identical fields anyway, and reg_no is the
+  // table's primary key so only one row can exist per value regardless.
+  const beforeDedupe = allRecords.length;
+  const dedupedByRegNo = new Map<string, ParsedRecord>();
+  for (const r of allRecords) {
+    dedupedByRegNo.set(r.regNo, r);
+  }
+  allRecords = Array.from(dedupedByRegNo.values());
+  const duplicatesDropped = beforeDedupe - allRecords.length;
+  if (duplicatesDropped > 0) {
+    console.error(`[sebi-check] sync for ${label}: ${duplicatesDropped} duplicate reg_no value(s) across pages, deduplicated before upsert.`);
+  }
+
   // Upsert in batches rather than one giant call.
   const BATCH = 200;
+  let failedBatches = 0;
   for (let i = 0; i < allRecords.length; i += BATCH) {
     const batch = allRecords.slice(i, i + BATCH).map((r) => ({
       reg_no: r.regNo,
@@ -253,12 +277,13 @@ export async function syncSebiCategory(
     const { error } = await admin.from("sebi_intermediaries").upsert(batch, { onConflict: "reg_no" });
     if (error) {
       console.error(`[sebi-check] sync for ${label}: upsert failed for batch starting at index ${i}:`, error);
+      failedBatches++;
     } else {
       upserted += batch.length;
     }
   }
 
-  return { category: label, totalRecords, pagesFetched, upserted };
+  return { category: label, totalRecords, pagesFetched, upserted, duplicatesDropped, failedBatches };
 }
 
 export interface SebiLookupMatch {
