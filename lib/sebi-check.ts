@@ -51,6 +51,15 @@
 // whichever segment synced last, which is fine for this feature's
 // purpose (proving the registration is real), not meant to be an
 // authoritative per-segment record.
+//
+// Depository Participant (CDSL intmId=18, NSDL intmId=19) added Nov 20,
+// 2026 — same deptId=14/endpoint/response shape again, but their
+// reg_no is a VISIBLY DIFFERENT format: "IN-DP-870-2026" rather than the
+// two-letters-plus-digits format every other category uses. This table's
+// reg_no column is plain text either way so storage needed no change,
+// but see app/verify/sebi/page.tsx's REG_NO_PATTERN — it has to
+// recognize both shapes, or an exact DP registration-number search
+// silently falls through to a (likely fruitless) name search instead.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -67,6 +76,8 @@ export const SEBI_CATEGORIES = {
   stockbroker_debt: { intmId: "37", label: "Stockbroker (Debt Segment)" },
   stockbroker_interest_rate_derivative: { intmId: "38", label: "Stockbroker (Interest Rate Derivative Segment)" },
   stockbroker_commodity_derivative: { intmId: "2", label: "Stockbroker (Commodity Derivative Segment)" },
+  depository_participant_cdsl: { intmId: "18", label: "Depository Participant (CDSL)" },
+  depository_participant_nsdl: { intmId: "19", label: "Depository Participant (NSDL)" },
 } as const;
 
 type CategoryKey = keyof typeof SEBI_CATEGORIES;

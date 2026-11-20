@@ -17,10 +17,16 @@ import { apiFetch } from "@/lib/api-fetch";
 // forcing it into the credited-verdict UI it doesn't actually belong to.
 //
 // A single input auto-detects whether the user typed a name or a SEBI
-// registration number (format: two letters + 'N' + 6-9 digits, e.g.
-// INA000017523, INH300000211) rather than asking the user to pick a mode
-// up front — one less decision before they can just check something.
-const REG_NO_PATTERN = /^IN[A-Z]\d{6,9}$/i;
+// registration number rather than asking the user to pick a mode up
+// front — one less decision before they can just check something.
+// Two formats, confirmed against real SEBI data: Investment
+// Adviser/Research Analyst/Stockbroker use two letters + 6-9 digits (e.g.
+// INA000017523, INH300000211, INZ000031633); Depository Participants
+// (added Nov 20, 2026) use a visibly different IN-DP-<digits>-<year>
+// format (e.g. IN-DP-870-2026) — easy to miss since it doesn't fit the
+// first pattern at all, confirmed live before this category was synced
+// rather than assumed from the others' shape.
+const REG_NO_PATTERN = /^(IN[A-Z]\d{6,9}|IN-DP-\d+-\d{4})$/i;
 
 interface SebiMatch {
   regNo: string;
@@ -98,7 +104,7 @@ export default function SebiCheckPage() {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Adviser/firm name, or registration number (e.g. INA000017523)…"
+          placeholder="Name, or registration number (e.g. INA000017523 or IN-DP-870-2026)…"
           maxLength={200}
           onKeyDown={(e) => e.key === "Enter" && submit()}
         />

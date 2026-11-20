@@ -4,16 +4,19 @@ import { syncSebiCategory, SEBI_CATEGORIES } from "@/lib/sebi-check";
 
 // Route-level execution budget. Nov 20, 2026: extended from the original
 // 2 categories (Investment Adviser + Research Analyst, ~3,476 records) to
-// 8, adding 6 stockbroker segments (~16,450 more records) — prompted by
-// "Zerodha" (a completely legitimate, well-known broker) returning "No
-// match" against the old 2-category-only cache. Looping all 8 in one
-// call would be ~797 pages at ~400ms apart plus fetch latency — likely
-// 10+ minutes, well past any Vercel timeout. So `category` (see below)
-// lets a caller sync ONE category per request; the worst single category
-// (equity segment stockbrokers, ~208 pages) stays comfortably under 300s
-// even on its own. 300 is still comfortably under Vercel's Pro-plan max
-// (900s) for a single category; bump the Vercel plan/limit if a future
-// category is ever large enough to need more.
+// 10 — 6 stockbroker segments (~16,450 more records, prompted by
+// "Zerodha" returning "No match" against the old 2-category cache even
+// though it's a completely legitimate, well-known broker), then CDSL +
+// NSDL depository participants (~1,113 more records, same prompt:
+// covering the DP registration type alongside adviser/broker). Looping
+// everything in one call would be 800+ pages at ~400ms apart plus fetch
+// latency — likely 10+ minutes, well past any Vercel timeout. So
+// `category` (see below) lets a caller sync ONE category per request;
+// the worst single category (equity segment stockbrokers, ~208 pages)
+// stays comfortably under 300s even on its own. 300 is still comfortably
+// under Vercel's Pro-plan max (900s) for a single category; bump the
+// Vercel plan/limit if a future category is ever large enough to need
+// more.
 export const maxDuration = 300;
 
 // SEBI intermediary-registry sync — Nov 20, 2026. See lib/sebi-check.ts's
@@ -28,7 +31,7 @@ export const maxDuration = 300;
 // nightly) instead of a manual trigger — not wired up yet, deliberately,
 // since this is the first real run and worth watching manually before
 // automating. When that happens, it should be one Cron entry PER
-// category (see `category` below), not one entry looping all 8 — same
+// category (see `category` below), not one entry looping all 10 — same
 // reasoning as the maxDuration comment above.
 //
 // Optional `?category=<key>` query param (a key from SEBI_CATEGORIES,
