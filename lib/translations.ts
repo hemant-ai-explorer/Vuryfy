@@ -112,6 +112,14 @@ const en: Dictionary = {
   "home.verifyPhoto": "Verify a Photo/Image",
   "home.verifyAudio": "Verify Audio",
   "home.verifyVideo": "Verify a Video",
+  // Nov 20, 2026: added for the SEBI intermediary-registration check
+  // (app/verify/sebi/page.tsx) — the only home-actions entry that's free
+  // (doesn't draw from Quick Check/Deep Investigation credits), hence the
+  // separate "free" badge key rather than folding "Free" into the label
+  // itself and breaking the "Verify X" naming pattern the other buttons use.
+  "home.verifySebi": "Verify SEBI Registration",
+  "home.verifyDigitalArrest": "Scam Call Check",
+  "home.free": "Free",
   "home.quickChecks": "Quick Checks",
   "home.deepInvestigations": "Deep Investigations",
   "home.settings": "Settings",
@@ -396,6 +404,9 @@ const hi: Dictionary = {
   "home.verifyPhoto": "फ़ोटो/इमेज सत्यापित करें",
   "home.verifyAudio": "ऑडियो सत्यापित करें",
   "home.verifyVideo": "वीडियो सत्यापित करें",
+  "home.verifySebi": "सेबी पंजीकरण सत्यापित करें",
+  "home.verifyDigitalArrest": "स्कैम कॉल जांच",
+  "home.free": "फ़्री",
   "home.quickChecks": "क्विक चेक",
   "home.deepInvestigations": "डीप इन्वेस्टिगेशन",
   "home.settings": "सेटिंग्स",

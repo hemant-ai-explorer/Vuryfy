@@ -78,6 +78,9 @@ export default function VerifyPage() {
         <p className="hint">
           Checking out a stock tip or adviser? <Link href="/verify/sebi">Verify their SEBI registration — free</Link>
         </p>
+        <p className="hint">
+          On a scary call right now? <Link href="/verify/digital-arrest">Check the warning signs — free</Link>
+        </p>
       </section>
     </main>
   );

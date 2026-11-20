@@ -96,10 +96,16 @@ export default function SebiCheckPage() {
       </nav>
       <section className="verify">
         <p className="eyebrow">SCAM PREVENTION</p>
-        <h1>Is this adviser SEBI-registered?</h1>
+        {/* "Entity" not "adviser" — Nov 20, 2026, once the registry grew
+            past Investment Adviser to also cover Research Analyst, 6
+            stockbroker segments, and CDSL/NSDL depository participants.
+            Some of those are individuals, most are firms, so "adviser"
+            undersold what this now checks. */}
+        <h1>Is this entity SEBI-registered?</h1>
         <p className="sub" style={{ margin: "0 0 24px" }}>
-          Before trusting a stock tip, trading group, or investment adviser, check whether their
-          name or registration number actually appears in SEBI&apos;s own public records.
+          Before trusting a stock tip, trading group, or entity claiming to be SEBI-registered,
+          check whether their name or registration number actually appears in SEBI&apos;s own
+          public records.
         </p>
         <input
           value={query}
@@ -124,7 +130,7 @@ export default function SebiCheckPage() {
               This name or registration number doesn&apos;t appear in our copy of SEBI&apos;s
               registry{syncedLabel ? ` (last synced ${syncedLabel})` : ""}. This does NOT by
               itself confirm a scam — our data could be out of date, or the name could be spelled
-              differently from what you entered — but a genuinely SEBI-registered adviser should
+              differently from what you entered — but a genuinely SEBI-registered entity should
               appear here. If you&apos;re unsure, verify directly on SEBI&apos;s own site before
               trusting anyone claiming this credential.
             </p>
@@ -159,7 +165,7 @@ export default function SebiCheckPage() {
               <p className="caution">
                 This confirms the registration itself is genuine. It does NOT confirm that the
                 specific person or channel who contacted you is actually authorized to represent
-                this registered entity — fraudsters sometimes cite a real adviser&apos;s name or
+                this registered entity — fraudsters sometimes cite a real entity&apos;s name or
                 number while impersonating them. If anything about the contact feels off, verify
                 directly with the firm through a channel you trust.
               </p>
