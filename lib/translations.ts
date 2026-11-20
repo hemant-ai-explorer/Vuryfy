@@ -119,16 +119,10 @@ const en: Dictionary = {
   // breaking the "Verify X" naming pattern the other buttons use.
   "home.verifySebi": "Verify SEBI Registration",
   "home.verifyDigitalArrest": "Scam Call Check",
-  // Deliberately NOT "Free" (key kept as home.free for minimal diff, but
-  // the VALUE changed same day, before this ever shipped to a user) —
-  // user's explicit concern: a bare "Free" badge on a button inside a
-  // subscription app reads as "this app has no subscription fee," which
-  // is false. The badge means "doesn't draw from your Quick
-  // Check/Deep Investigation credits," so it says that instead, using the
-  // same "credit" vocabulary the balance-card and nav already use
-  // (home.quickChecks, home.deepInvestigations, nav.credits) rather than
-  // introducing new terminology.
-  "home.free": "No Credit",
+  // Nov 20, 2026: briefly changed to "No Credit" over concern that a bare
+  // "Free" badge could read as "this app has no subscription fee" — user
+  // decided to keep "Free" after seeing it in place; reverted same day.
+  "home.free": "Free",
   "home.quickChecks": "Quick Checks",
   "home.deepInvestigations": "Deep Investigations",
   "home.settings": "Settings",
@@ -415,7 +409,7 @@ const hi: Dictionary = {
   "home.verifyVideo": "वीडियो सत्यापित करें",
   "home.verifySebi": "सेबी पंजीकरण सत्यापित करें",
   "home.verifyDigitalArrest": "स्कैम कॉल जांच",
-  "home.free": "क्रेडिट मुक्त",
+  "home.free": "फ़्री",
   "home.quickChecks": "क्विक चेक",
   "home.deepInvestigations": "डीप इन्वेस्टिगेशन",
   "home.settings": "सेटिंग्स",

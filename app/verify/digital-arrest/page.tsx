@@ -129,10 +129,7 @@ export default function DigitalArrestCheckPage() {
         <button className="back" onClick={() => router.push("/")}>
           ← Back
         </button>
-        {/* "No credit used" not "Free" — same reasoning as /verify/sebi:
-            this means no Quick Check/Deep Investigation credit is spent,
-            not that the app has no subscription fee. */}
-        <div className="credits">No credit used</div>
+        <div className="credits">Free — no credit used</div>
       </nav>
       <section className="verify">
         <p className="eyebrow">SCAM PREVENTION</p>

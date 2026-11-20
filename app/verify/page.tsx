@@ -77,11 +77,11 @@ export default function VerifyPage() {
         </p>
         <p className="hint">
           Checking out a stock tip or adviser?{" "}
-          <Link href="/verify/sebi">Verify their SEBI registration — no credit used</Link>
+          <Link href="/verify/sebi">Verify their SEBI registration — free</Link>
         </p>
         <p className="hint">
           On a scary call right now?{" "}
-          <Link href="/verify/digital-arrest">Check the warning signs — no credit used</Link>
+          <Link href="/verify/digital-arrest">Check the warning signs — free</Link>
         </p>
       </section>
     </main>
