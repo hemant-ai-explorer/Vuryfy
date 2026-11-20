@@ -160,7 +160,8 @@ export default function DigitalArrestCheckPage() {
 
         {!showHelp && (
           <button className="text-button" style={{ marginBottom: 20 }} onClick={() => setSkipToHelp(true)}>
-            Already sure this is a scam? Skip straight to what to do →
+            Already sure this is a scam?{" "}
+            <span style={{ textDecoration: "underline" }}>Skip straight to what to do</span> →
           </button>
         )}
 
@@ -202,76 +203,86 @@ export default function DigitalArrestCheckPage() {
           ))}
         </div>
 
-        {showHelp && (
-          <div ref={helpRef} className="scam-warning" style={{ marginTop: 28 }}>
-            <p
-              style={{
-                margin: "0 0 10px",
-                fontWeight: 700,
-                fontSize: 13,
-                letterSpacing: ".04em",
-                textTransform: "uppercase",
-                color: "#7a281f",
-              }}
+        {/* Nov 20, 2026: the escape toolkit (1930 / cybercrime.gov.in / Chakshu
+            / trusted-contact SOS) used to be nested inside `showHelp`, so it
+            only existed once a flag matched or the skip link was clicked.
+            User feedback: these should be reachable regardless — someone
+            mid-checklist, or who answered "No" to everything, can still want
+            to report a number or message a contact. Only the
+            pattern-matched warning text above it stays conditional on
+            showHelp; the toolkit itself is now unconditional. */}
+        <div ref={helpRef} className="scam-warning" style={{ marginTop: 28 }}>
+          {showHelp && (
+            <>
+              <p
+                style={{
+                  margin: "0 0 10px",
+                  fontWeight: 700,
+                  fontSize: 13,
+                  letterSpacing: ".04em",
+                  textTransform: "uppercase",
+                  color: "#7a281f",
+                }}
+              >
+                This matches the digital arrest / scary-call scam pattern
+              </p>
+              <p className="caution" style={{ margin: 0 }}>
+                {matched.length > 0
+                  ? "No Indian agency does what you just described. Hang up now — you can't be arrested, fined, or investigated over a call, and nobody genuine will ask you to stay on one."
+                  : "If anyone is pressuring you for money, secrecy, or to stay on a call, treat it as a scam. Hang up — you can always call a real agency back yourself to check."}
+              </p>
+            </>
+          )}
+
+          <div style={{ marginTop: showHelp ? 22 : 0, display: "grid", gap: 10 }}>
+            <a className="secondary-link" href="tel:1930" style={{ width: "100%" }}>
+              Call 1930 (national cybercrime helpline)
+            </a>
+            <a
+              className="secondary-link"
+              href="https://cybercrime.gov.in"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ width: "100%" }}
             >
-              This matches the digital arrest / scary-call scam pattern
-            </p>
-            <p className="caution" style={{ margin: 0 }}>
-              {matched.length > 0
-                ? "No Indian agency does what you just described. Hang up now — you can't be arrested, fined, or investigated over a call, and nobody genuine will ask you to stay on one."
-                : "If anyone is pressuring you for money, secrecy, or to stay on a call, treat it as a scam. Hang up — you can always call a real agency back yourself to check."}
-            </p>
-
-            <div style={{ marginTop: 22, display: "grid", gap: 10 }}>
-              <a className="secondary-link" href="tel:1930" style={{ width: "100%" }}>
-                Call 1930 (national cybercrime helpline)
-              </a>
-              <a
-                className="secondary-link"
-                href="https://cybercrime.gov.in"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ width: "100%" }}
-              >
-                Report at cybercrime.gov.in
-              </a>
-              <a
-                className="secondary-link"
-                href="https://sancharsaathi.gov.in/sfc"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ width: "100%" }}
-              >
-                Report this number (Chakshu)
-              </a>
-            </div>
-
-            <div style={{ marginTop: 26, borderTop: "1px solid #f3b4ac", paddingTop: 20 }}>
-              <p style={{ margin: "0 0 12px", fontWeight: 600 }}>Tell someone right now</p>
-              {contactPhone ? (
-                <div style={{ display: "grid", gap: 10 }}>
-                  <a
-                    className="primary-link"
-                    href={waLink!}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ width: "100%" }}
-                  >
-                    Message {contactName || "your contact"} on WhatsApp
-                  </a>
-                  <a className="secondary-link" href={smsLink!} style={{ width: "100%" }}>
-                    Text {contactName || "your contact"} instead
-                  </a>
-                </div>
-              ) : (
-                <p className="hint">
-                  You haven&apos;t set up a trusted contact yet. <a href="/settings">Add one in Settings</a>{" "}
-                  so you can alert them in one tap next time.
-                </p>
-              )}
-            </div>
+              Report at cybercrime.gov.in
+            </a>
+            <a
+              className="secondary-link"
+              href="https://sancharsaathi.gov.in/sfc"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ width: "100%" }}
+            >
+              Report this number (Chakshu)
+            </a>
           </div>
-        )}
+
+          <div style={{ marginTop: 26, borderTop: "1px solid #f3b4ac", paddingTop: 20 }}>
+            <p style={{ margin: "0 0 12px", fontWeight: 600 }}>Tell someone right now</p>
+            {contactPhone ? (
+              <div style={{ display: "grid", gap: 10 }}>
+                <a
+                  className="primary-link"
+                  href={waLink!}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ width: "100%" }}
+                >
+                  Message {contactName || "your contact"} on WhatsApp
+                </a>
+                <a className="secondary-link" href={smsLink!} style={{ width: "100%" }}>
+                  Text {contactName || "your contact"} instead
+                </a>
+              </div>
+            ) : (
+              <p className="hint">
+                You haven&apos;t set up a trusted contact yet. <a href="/settings">Add one in Settings</a>{" "}
+                so you can alert them in one tap next time.
+              </p>
+            )}
+          </div>
+        </div>
 
         {showCalm && (
           <div className="qr-payment" style={{ marginTop: 28 }}>
