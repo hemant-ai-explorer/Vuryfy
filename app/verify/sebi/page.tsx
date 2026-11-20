@@ -92,7 +92,11 @@ export default function SebiCheckPage() {
         <button className="back" onClick={() => router.push("/")}>
           ← Back
         </button>
-        <div className="credits">Free — no credit used</div>
+        {/* "No credit used" not "Free" — user's explicit call, since a
+            bare "Free" label here could read as "this app has no
+            subscription fee," which isn't true. This specifically means
+            it doesn't draw from Quick Check/Deep Investigation credits. */}
+        <div className="credits">No credit used</div>
       </nav>
       <section className="verify">
         <p className="eyebrow">SCAM PREVENTION</p>

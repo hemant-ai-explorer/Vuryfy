@@ -115,11 +115,20 @@ const en: Dictionary = {
   // Nov 20, 2026: added for the SEBI intermediary-registration check
   // (app/verify/sebi/page.tsx) — the only home-actions entry that's free
   // (doesn't draw from Quick Check/Deep Investigation credits), hence the
-  // separate "free" badge key rather than folding "Free" into the label
-  // itself and breaking the "Verify X" naming pattern the other buttons use.
+  // separate badge key rather than folding it into the label itself and
+  // breaking the "Verify X" naming pattern the other buttons use.
   "home.verifySebi": "Verify SEBI Registration",
   "home.verifyDigitalArrest": "Scam Call Check",
-  "home.free": "Free",
+  // Deliberately NOT "Free" (key kept as home.free for minimal diff, but
+  // the VALUE changed same day, before this ever shipped to a user) —
+  // user's explicit concern: a bare "Free" badge on a button inside a
+  // subscription app reads as "this app has no subscription fee," which
+  // is false. The badge means "doesn't draw from your Quick
+  // Check/Deep Investigation credits," so it says that instead, using the
+  // same "credit" vocabulary the balance-card and nav already use
+  // (home.quickChecks, home.deepInvestigations, nav.credits) rather than
+  // introducing new terminology.
+  "home.free": "No Credit",
   "home.quickChecks": "Quick Checks",
   "home.deepInvestigations": "Deep Investigations",
   "home.settings": "Settings",
@@ -406,7 +415,7 @@ const hi: Dictionary = {
   "home.verifyVideo": "वीडियो सत्यापित करें",
   "home.verifySebi": "सेबी पंजीकरण सत्यापित करें",
   "home.verifyDigitalArrest": "स्कैम कॉल जांच",
-  "home.free": "फ़्री",
+  "home.free": "क्रेडिट मुक्त",
   "home.quickChecks": "क्विक चेक",
   "home.deepInvestigations": "डीप इन्वेस्टिगेशन",
   "home.settings": "सेटिंग्स",
