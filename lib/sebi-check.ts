@@ -29,11 +29,28 @@
 //
 // Categories: SEBI's registration-number prefix self-identifies the
 // category (INA = Investment Adviser, INH = Research Analyst, INZ =
-// Stockbroker). Only Investment Adviser (intmId 13) and Research Analyst
-// (intmId 14) are wired up for now — the two categories fake "SEBI
-// registered" trading-tip scams actually impersonate. Stockbroker
-// segments (intmId 30/31/32/37/38) use the identical endpoint/response
-// shape and could be added the same way later.
+// Stockbroker).
+//
+// Stockbroker segments added Nov 20, 2026, prompted directly by a real
+// test case: "Zerodha" returned "No match" against the original
+// Investment Adviser + Research Analyst-only cache, which reads like a
+// red flag for a completely legitimate, very well-known broker — its
+// SEBI registration is as a stockbroker, a category that wasn't synced
+// yet. The six segment intmIds below were read live off SEBI's own
+// "Recognised Intermediaries" page (sebi.gov.in/sebiweb/other/
+// OtherAction.do?doRecognised=yes), not guessed — note intmId=2 for
+// Commodity Derivative is an outlier (every other stockbroker segment is
+// in the 30s), so don't "fix" it to fit the pattern. All six confirmed
+// live Nov 20, 2026 to use the same deptId=14 and the same
+// getsearchintminfo.jsp endpoint/response shape as Investment Adviser and
+// Research Analyst (one extra "Trade Name"/"Exchange Name" field each,
+// harmlessly ignored by parseRecords' label-keyed extraction). A broker
+// often holds more than one segment's registration under the same
+// reg_no — since reg_no is this table's primary key, syncing multiple
+// segments for the same broker just means `category` ends up reflecting
+// whichever segment synced last, which is fine for this feature's
+// purpose (proving the registration is real), not meant to be an
+// authoritative per-segment record.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -44,6 +61,12 @@ const PAGE_SIZE = 25; // confirmed from SEBI's own response, not configurable on
 export const SEBI_CATEGORIES = {
   investment_adviser: { intmId: "13", label: "Investment Adviser" },
   research_analyst: { intmId: "14", label: "Research Analyst" },
+  stockbroker_equity: { intmId: "30", label: "Stockbroker (Equity Segment)" },
+  stockbroker_equity_derivative: { intmId: "31", label: "Stockbroker (Equity Derivative Segment)" },
+  stockbroker_currency_derivative: { intmId: "32", label: "Stockbroker (Currency Derivative Segment)" },
+  stockbroker_debt: { intmId: "37", label: "Stockbroker (Debt Segment)" },
+  stockbroker_interest_rate_derivative: { intmId: "38", label: "Stockbroker (Interest Rate Derivative Segment)" },
+  stockbroker_commodity_derivative: { intmId: "2", label: "Stockbroker (Commodity Derivative Segment)" },
 } as const;
 
 type CategoryKey = keyof typeof SEBI_CATEGORIES;
