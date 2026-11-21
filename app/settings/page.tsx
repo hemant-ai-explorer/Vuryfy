@@ -185,24 +185,23 @@ export default function SettingsPage() {
           {saved && !saving && <p className="hint">{t("settings.saved")}</p>}
         </div>
 
-        {/* Trusted contact for Scam SOS — Nov 20, 2026. English-only for
-            now, same flagged i18n gap as the SEBI check and the WhatsApp
-            UI (newer, smaller features shipping ahead of the full
-            9-language pass). Deliberately plain name+phone inputs, no
-            contact-picker integration — a browser contact picker needs
-            HTTPS + user gesture + browser support that isn't guaranteed
-            here, and typing two fields once in Settings is a low enough
-            bar for a one-time setup step. */}
+        {/* Trusted contact for Scam SOS — Nov 20, 2026, translated Nov 21,
+            2026 once a Hindi-preference user reported this panel (plus the
+            SEBI check and digital-arrest checklist) still showed English.
+            Deliberately plain name+phone inputs, no contact-picker
+            integration — a browser contact picker needs HTTPS + user
+            gesture + browser support that isn't guaranteed here, and
+            typing two fields once in Settings is a low enough bar for a
+            one-time setup step. */}
         <div className="panel" style={{ width: "100%", marginTop: 20 }}>
-          <h2>Trusted contact for Scam SOS</h2>
+          <h2>{t("settings.trustedContactHeading")}</h2>
           <p className="sub" style={{ margin: "0 0 18px", fontSize: 15 }}>
-            If you&apos;re ever on a scary call pressuring you for money or secrecy, the digital-arrest
-            check can message this person in one tap. Set it up now, not mid-call.
+            {t("settings.trustedContactSub")}
           </p>
           <input
             value={contactName}
             onChange={(e) => setContactName(e.target.value)}
-            placeholder="Name (e.g. a family member or close friend)"
+            placeholder={t("settings.trustedContactNamePlaceholder")}
             maxLength={120}
             disabled={!contactLoaded}
             style={{ marginBottom: 10 }}
@@ -210,19 +209,19 @@ export default function SettingsPage() {
           <input
             value={contactPhone}
             onChange={(e) => setContactPhone(e.target.value)}
-            placeholder="Their phone number (e.g. 98XXXXXXXX)"
+            placeholder={t("settings.trustedContactPhonePlaceholder")}
             maxLength={20}
             disabled={!contactLoaded}
           />
           <div className="actions" style={{ marginTop: 14 }}>
             <span />
             <button onClick={saveTrustedContact} disabled={!contactLoaded || contactSaving}>
-              {contactSaving ? "Saving…" : "Save contact"}
+              {contactSaving ? t("settings.saving") : t("settings.saveContact")}
             </button>
           </div>
           {contactError && <p className="error">{contactError}</p>}
           {contactSaved && !contactSaving && !contactError && (
-            <p className="hint">Saved — you can clear both fields and save again to remove it.</p>
+            <p className="hint">{t("settings.trustedContactSavedHint")}</p>
           )}
         </div>
 

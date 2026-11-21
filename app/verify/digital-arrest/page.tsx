@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { apiFetch } from "@/lib/api-fetch";
+import { useLanguage } from "@/app/providers/language-provider";
 
 // Guided "digital arrest" / scary-call checklist — Nov 20, 2026. See
 // claude/scam-feature-digital-arrest-2026-11-20.md (Vuryfy project notes)
@@ -30,46 +31,19 @@ import { apiFetch } from "@/lib/api-fetch";
 // needs certainty on pattern recognition alone, which is why it's a
 // deterministic checklist instead of an AI call with retrieval it doesn't
 // need.
-const RED_FLAGS = [
-  {
-    id: "stay_on_call",
-    question:
-      "Are they telling you to stay on this video/phone call, keep your camera on, or not hang up?",
-    reason:
-      "No Indian law-enforcement agency keeps you on a call or video as part of a real investigation.",
-  },
-  {
-    id: "secrecy",
-    question: "Have they told you not to tell your family, your bank, or a lawyer about this?",
-    reason:
-      "A genuine case is never confidential from your own family or bank — that secrecy demand is a control tactic, not a legal requirement.",
-  },
-  {
-    id: "money_to_verify",
-    question:
-      'Have they asked you to transfer money, or pay a "fine," to "verify," "secure," or "release" your funds?',
-    reason:
-      "No agency asks for money to verify, secure, or release funds that are already yours. This is the single clearest tell there is.",
-  },
-  {
-    id: "fake_document",
-    question: "Did they show you a warrant, FIR, or court order on screen or over WhatsApp/chat?",
-    reason:
-      "Uniforms, badges, and documents shown over video or chat are easy to fake and aren't how real legal notices are served.",
-  },
-  {
-    id: "callback_number",
-    question:
-      "Did they ask you to call them back on a number they gave you, instead of one you looked up yourself?",
-    reason: "Always call an agency back on its own published number — never one the caller hands you.",
-  },
-  {
-    id: "cold_open",
-    question:
-      "Did the call start about a parcel, your Aadhaar, a bank account, or a relative in trouble — from someone you didn't contact first?",
-    reason:
-      "This is the standard opening line for this scam, designed to create instant panic before the other tactics kick in.",
-  },
+// Nov 21, 2026: question/reason text used to live inline here, but that
+// made it impossible to translate (a hook like useLanguage() can't be
+// called at module scope, only inside the component). The six flags now
+// carry just their id, and the question/reason strings are looked up at
+// render time via t(`da.flag.${id}.question`) / t(`da.flag.${id}.reason`)
+// — see the matching "da.flag.*" keys in lib/translations.ts.
+const RED_FLAG_IDS = [
+  "stay_on_call",
+  "secrecy",
+  "money_to_verify",
+  "fake_document",
+  "callback_number",
+  "cold_open",
 ] as const;
 
 type Answer = "yes" | "no";
@@ -77,6 +51,7 @@ type Answer = "yes" | "no";
 export default function DigitalArrestCheckPage() {
   const router = useRouter();
   const supabase = createClient();
+  const { t } = useLanguage();
   const [answers, setAnswers] = useState<Record<string, Answer>>({});
   const [skipToHelp, setSkipToHelp] = useState(false);
   const [contactName, setContactName] = useState<string | null>(null);
@@ -118,8 +93,8 @@ export default function DigitalArrestCheckPage() {
     setAnswers((prev) => ({ ...prev, [id]: value }));
   }
 
-  const matched = RED_FLAGS.filter((f) => answers[f.id] === "yes");
-  const allAnswered = RED_FLAGS.every((f) => answers[f.id]);
+  const matched = RED_FLAG_IDS.filter((id) => answers[id] === "yes");
+  const allAnswered = RED_FLAG_IDS.every((id) => answers[id]);
   const showHelp = skipToHelp || matched.length > 0;
   const showCalm = !showHelp && allAnswered;
 
@@ -142,44 +117,44 @@ export default function DigitalArrestCheckPage() {
     <main className="shell narrow">
       <nav>
         <button className="back" onClick={() => router.push("/")}>
-          ← Back
+          {t("nav.back")}
         </button>
-        <div className="credits">Free — no credit used</div>
+        <div className="credits">{t("nav.freeCredits")}</div>
       </nav>
       <section className="verify">
-        <p className="eyebrow">SCAM PREVENTION</p>
-        <h1>Is this call a scam?</h1>
+        <p className="eyebrow">{t("scam.eyebrow")}</p>
+        <h1>{t("da.heading")}</h1>
         <p className="sub" style={{ margin: "0 0 10px" }}>
-          If someone on the phone or video is claiming to be police, CBI, customs, RBI, or a bank
-          and pressuring you, answer these quickly — you don&apos;t need to finish the whole list.
+          {t("da.sub")}
         </p>
         <p className="hint" style={{ margin: "0 0 24px" }}>
-          No Indian law-enforcement agency arrests, investigates, or collects a fine over a phone or
-          video call. If you&apos;re not sure, hang up and verify in person.
+          {t("da.hint")}
         </p>
 
         {!showHelp && (
           <button className="text-button" style={{ marginBottom: 20 }} onClick={() => setSkipToHelp(true)}>
-            Already sure this is a scam?{" "}
-            <span style={{ textDecoration: "underline" }}>Skip straight to what to do</span> →
+            {t("da.skipPrefix")}{" "}
+            <span style={{ textDecoration: "underline" }}>{t("da.skipLink")}</span> →
           </button>
         )}
 
         <div style={{ display: "grid", gap: 16 }}>
-          {RED_FLAGS.map((f) => (
-            <div key={f.id} className="panel" style={{ width: "100%" }}>
-              <p style={{ margin: "0 0 12px", fontSize: 16, lineHeight: 1.5 }}>{f.question}</p>
+          {RED_FLAG_IDS.map((id) => (
+            <div key={id} className="panel" style={{ width: "100%" }}>
+              <p style={{ margin: "0 0 12px", fontSize: 16, lineHeight: 1.5 }}>
+                {t(`da.flag.${id}.question`)}
+              </p>
               <div style={{ display: "flex", gap: 10 }}>
                 <button
                   style={{
                     width: "auto",
                     padding: "0 22px",
                     marginTop: 0,
-                    background: answers[f.id] === "yes" ? "#b42318" : undefined,
+                    background: answers[id] === "yes" ? "#b42318" : undefined,
                   }}
-                  onClick={() => answer(f.id, "yes")}
+                  onClick={() => answer(id, "yes")}
                 >
-                  Yes
+                  {t("da.yes")}
                 </button>
                 <button
                   className="secondary"
@@ -187,16 +162,16 @@ export default function DigitalArrestCheckPage() {
                     width: "auto",
                     padding: "0 22px",
                     marginTop: 0,
-                    opacity: answers[f.id] === "no" ? 1 : 0.85,
+                    opacity: answers[id] === "no" ? 1 : 0.85,
                   }}
-                  onClick={() => answer(f.id, "no")}
+                  onClick={() => answer(id, "no")}
                 >
-                  No
+                  {t("da.no")}
                 </button>
               </div>
-              {answers[f.id] === "yes" && (
+              {answers[id] === "yes" && (
                 <p className="caution" style={{ marginTop: 14 }}>
-                  {f.reason}
+                  {t(`da.flag.${id}.reason`)}
                 </p>
               )}
             </div>
@@ -224,19 +199,17 @@ export default function DigitalArrestCheckPage() {
                   color: "#7a281f",
                 }}
               >
-                This matches the digital arrest / scary-call scam pattern
+                {t("da.warningLabel")}
               </p>
               <p className="caution" style={{ margin: 0 }}>
-                {matched.length > 0
-                  ? "No Indian agency does what you just described. Hang up now — you can't be arrested, fined, or investigated over a call, and nobody genuine will ask you to stay on one."
-                  : "If anyone is pressuring you for money, secrecy, or to stay on a call, treat it as a scam. Hang up — you can always call a real agency back yourself to check."}
+                {matched.length > 0 ? t("da.warningMatched") : t("da.warningSkip")}
               </p>
             </>
           )}
 
           <div style={{ marginTop: showHelp ? 22 : 0, display: "grid", gap: 10 }}>
             <a className="secondary-link" href="tel:1930" style={{ width: "100%" }}>
-              Call 1930 (national cybercrime helpline)
+              {t("da.call1930")}
             </a>
             <a
               className="secondary-link"
@@ -245,7 +218,7 @@ export default function DigitalArrestCheckPage() {
               rel="noopener noreferrer"
               style={{ width: "100%" }}
             >
-              Report at cybercrime.gov.in
+              {t("da.reportCybercrime")}
             </a>
             <a
               className="secondary-link"
@@ -254,12 +227,12 @@ export default function DigitalArrestCheckPage() {
               rel="noopener noreferrer"
               style={{ width: "100%" }}
             >
-              Report this number (Chakshu)
+              {t("da.reportChakshu")}
             </a>
           </div>
 
           <div style={{ marginTop: 26, borderTop: "1px solid #f3b4ac", paddingTop: 20 }}>
-            <p style={{ margin: "0 0 12px", fontWeight: 600 }}>Tell someone right now</p>
+            <p style={{ margin: "0 0 12px", fontWeight: 600 }}>{t("da.tellSomeone")}</p>
             {contactPhone ? (
               <div style={{ display: "grid", gap: 10 }}>
                 <a
@@ -269,16 +242,16 @@ export default function DigitalArrestCheckPage() {
                   rel="noopener noreferrer"
                   style={{ width: "100%" }}
                 >
-                  Message {contactName || "your contact"} on WhatsApp
+                  {t("da.messageContact").replace("{name}", contactName || t("da.yourContact"))}
                 </a>
                 <a className="secondary-link" href={smsLink!} style={{ width: "100%" }}>
-                  Text {contactName || "your contact"} instead
+                  {t("da.textContact").replace("{name}", contactName || t("da.yourContact"))}
                 </a>
               </div>
             ) : (
               <p className="hint">
-                You haven&apos;t set up a trusted contact yet. <a href="/settings">Add one in Settings</a>{" "}
-                so you can alert them in one tap next time.
+                {t("da.noContactText")} <a href="/settings">{t("da.noContactLink")}</a>{" "}
+                {t("da.noContactSuffix")}
               </p>
             )}
           </div>
@@ -286,14 +259,9 @@ export default function DigitalArrestCheckPage() {
 
         {showCalm && (
           <div className="qr-payment" style={{ marginTop: 28 }}>
-            <span>NO CLASSIC WARNING SIGNS MATCHED</span>
-            <h3>Still, stay cautious</h3>
-            <p className="caution">
-              None of the usual tells matched what you described. That&apos;s reassuring, but it
-              doesn&apos;t guarantee the call is genuine — if anything about it still feels off, you can
-              always hang up and call the agency back yourself on a number you look up independently,
-              not one given to you on the call.
-            </p>
+            <span>{t("da.calmBadge")}</span>
+            <h3>{t("da.calmHeading")}</h3>
+            <p className="caution">{t("da.calmBody")}</p>
           </div>
         )}
       </section>

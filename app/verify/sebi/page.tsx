@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { apiFetch } from "@/lib/api-fetch";
+import { useLanguage } from "@/app/providers/language-provider";
 
 // SEBI registration check — Nov 20, 2026. See lib/sebi-check.ts's header
 // for the full rationale (investment/trading scams are ~76-77% of all
@@ -43,6 +44,7 @@ interface SebiMatch {
 export default function SebiCheckPage() {
   const router = useRouter();
   const supabase = createClient();
+  const { t } = useLanguage();
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -90,90 +92,79 @@ export default function SebiCheckPage() {
     <main className="shell narrow">
       <nav>
         <button className="back" onClick={() => router.push("/")}>
-          ← Back
+          {t("nav.back")}
         </button>
-        <div className="credits">Free — no credit used</div>
+        <div className="credits">{t("nav.freeCredits")}</div>
       </nav>
       <section className="verify">
-        <p className="eyebrow">SCAM PREVENTION</p>
+        <p className="eyebrow">{t("scam.eyebrow")}</p>
         {/* "Entity" not "adviser" — Nov 20, 2026, once the registry grew
             past Investment Adviser to also cover Research Analyst, 6
             stockbroker segments, and CDSL/NSDL depository participants.
             Some of those are individuals, most are firms, so "adviser"
             undersold what this now checks. */}
-        <h1>Is this entity SEBI-registered?</h1>
+        <h1>{t("sebi.heading")}</h1>
         <p className="sub" style={{ margin: "0 0 24px" }}>
-          Before trusting a stock tip, trading group, or entity claiming to be SEBI-registered,
-          check whether their name or registration number actually appears in SEBI&apos;s own
-          public records.
+          {t("sebi.sub")}
         </p>
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Name, or registration number (e.g. INA000017523 or IN-DP-870-2026)…"
+          placeholder={t("sebi.placeholder")}
           maxLength={200}
           onKeyDown={(e) => e.key === "Enter" && submit()}
         />
         <div className="actions">
           <span />
           <button onClick={submit} disabled={loading || query.trim().length < 3}>
-            {loading ? "Checking…" : "Check"}
+            {loading ? t("claim.checking") : t("sebi.checkButton")}
           </button>
         </div>
         {error && <p className="error">{error}</p>}
 
         {searched && matches && matches.length === 0 && (
           <div className="qr-payment">
-            <span>NOT FOUND</span>
-            <h3>No match in SEBI&apos;s records</h3>
+            <span>{t("sebi.notFound")}</span>
+            <h3>{t("sebi.noMatchHeading")}</h3>
             <p className="caution">
-              This name or registration number doesn&apos;t appear in our copy of SEBI&apos;s
-              registry{syncedLabel ? ` (last synced ${syncedLabel})` : ""}. This does NOT by
-              itself confirm a scam — our data could be out of date, or the name could be spelled
-              differently from what you entered — but a genuinely SEBI-registered entity should
-              appear here. If you&apos;re unsure, verify directly on SEBI&apos;s own site before
-              trusting anyone claiming this credential.
+              {t("sebi.noMatchBody").replace(
+                "{syncedSuffix}",
+                syncedLabel ? t("sebi.lastSyncedSuffix").replace("{date}", syncedLabel) : ""
+              )}
             </p>
           </div>
         )}
 
         {searched && matches && matches.length === 0 && !syncedAt && (
-          <p className="hint">
-            Our SEBI registry hasn&apos;t finished its first sync yet — results may be incomplete
-            right now.
-          </p>
+          <p className="hint">{t("sebi.notSyncedHint")}</p>
         )}
 
         {matches &&
           matches.map((m) => (
             <div key={m.regNo} className="qr-payment" style={!m.isActive ? { opacity: 0.85 } : undefined}>
-              <span>{m.isActive ? "REGISTERED WITH SEBI" : "REGISTRATION LAPSED/CANCELLED"}</span>
+              <span>{m.isActive ? t("sebi.registered") : t("sebi.lapsed")}</span>
               <h3>{m.name}</h3>
               <p className="payee-id">
                 {m.category} · {m.regNo}
               </p>
               <p className="payee-id">
                 {m.isActive
-                  ? `Active since ${m.validFrom || "an unspecified date"}`
-                  : `Was valid from ${m.validFrom || "an unspecified date"} until ${m.validTo}`}
+                  ? t("sebi.activeSince").replace("{date}", m.validFrom || t("sebi.unspecifiedDate"))
+                  : t("sebi.validFromUntil")
+                      .replace("{from}", m.validFrom || t("sebi.unspecifiedDate"))
+                      .replace("{to}", m.validTo || "")}
               </p>
               {(m.address || m.phone || m.email) && (
                 <p className="payee-id">
                   {[m.address, m.phone, m.email].filter(Boolean).join(" · ")}
                 </p>
               )}
-              <p className="caution">
-                This confirms the registration itself is genuine. It does NOT confirm that the
-                specific person or channel who contacted you is actually authorized to represent
-                this registered entity — fraudsters sometimes cite a real entity&apos;s name or
-                number while impersonating them. If anything about the contact feels off, verify
-                directly with the firm through a channel you trust.
-              </p>
+              <p className="caution">{t("sebi.registeredCaution")}</p>
             </div>
           ))}
 
         {syncedLabel && (!matches || matches.length > 0) && (
-          <p className="hint">SEBI registry last synced {syncedLabel}.</p>
+          <p className="hint">{t("sebi.lastSyncedHint").replace("{date}", syncedLabel)}</p>
         )}
       </section>
     </main>
