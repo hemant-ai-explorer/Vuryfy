@@ -274,4 +274,10 @@ export const mr: Record<string, string> = {
   "settings.trustedContactPhonePlaceholder": "त्यांचा फोन नंबर (उदा. 98XXXXXXXX)",
   "settings.saveContact": "संपर्क जतन करा",
   "settings.trustedContactSavedHint": "जतन केले — हे काढण्यासाठी दोन्ही फील्ड रिकामी करून पुन्हा जतन करा.",
+  // Nov 21, 2026 (follow-up): the home-screen menu buttons linking to
+  // these two features were also missed in the original Nov 20 gap —
+  // present in en/hi but not here.
+  "home.verifySebi": "सेबी नोंदणी सत्यापित करा",
+  "home.verifyDigitalArrest": "स्कॅम कॉल तपासणी",
+  "home.free": "मोफत",
 };

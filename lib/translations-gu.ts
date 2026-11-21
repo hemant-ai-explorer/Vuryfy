@@ -273,4 +273,10 @@ export const gu: Record<string, string> = {
   "settings.trustedContactPhonePlaceholder": "તેમનો ફોન નંબર (દા.ત. 98XXXXXXXX)",
   "settings.saveContact": "સંપર્ક સાચવો",
   "settings.trustedContactSavedHint": "સાચવ્યું — તેને દૂર કરવા બંને ફીલ્ડ ખાલી કરીને ફરીથી સાચવો.",
+  // Nov 21, 2026 (follow-up): the home-screen menu buttons linking to
+  // these two features were also missed in the original Nov 20 gap —
+  // present in en/hi but not here.
+  "home.verifySebi": "સેબી નોંધણી ચકાસો",
+  "home.verifyDigitalArrest": "સ્કેમ કૉલ ચકાસણી",
+  "home.free": "મફત",
 };

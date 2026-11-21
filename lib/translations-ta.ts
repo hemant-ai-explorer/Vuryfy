@@ -273,4 +273,10 @@ export const ta: Record<string, string> = {
   "settings.trustedContactPhonePlaceholder": "அவர்களின் தொலைபேசி எண் (எ.கா. 98XXXXXXXX)",
   "settings.saveContact": "தொடர்பைச் சேமிக்கவும்",
   "settings.trustedContactSavedHint": "சேமிக்கப்பட்டது — இதை அகற்ற இரண்டு புலங்களையும் அழித்து மீண்டும் சேமிக்கவும்.",
+  // Nov 21, 2026 (follow-up): the home-screen menu buttons linking to
+  // these two features were also missed in the original Nov 20 gap —
+  // present in en/hi but not here.
+  "home.verifySebi": "செபி பதிவை சரிபார்க்கவும்",
+  "home.verifyDigitalArrest": "மோசடி அழைப்பு சரிபார்ப்பு",
+  "home.free": "இலவசம்",
 };
