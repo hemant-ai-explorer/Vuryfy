@@ -213,6 +213,17 @@ export const mr: Record<string, string> = {
   "verdict.Suspicious": "संशयास्पद",
   "verdict.Inconclusive": "अनिर्णित",
   "verdict.OutOfContext": "संदर्भाबाहेर",
+
+  // Nov 21, 2026 — Daily Check. See the matching comment in
+  // translations.ts's `en` block for the full rationale.
+  "dailyCheck.title": "आजची तपासणी",
+  "dailyCheck.claimLabel": "काय तपासले गेले",
+  "dailyCheck.caveatsHeading": "जाणून घेण्यासारखे",
+  "dailyCheck.sourcesHeading": "स्रोत",
+  "dailyCheck.notFoundHeading": "तपासणी सापडली नाही",
+  "dailyCheck.notFoundBody": "ही लिंक कालबाह्य झाली असेल किंवा ही तपासणी आता उपलब्ध नाही.",
+  "dailyCheck.openApp": "वुर्यफाय उघडा",
+
   // Nov 21, 2026 — SEBI check / digital-arrest / trusted-contact coverage,
   // see translations.ts's matching comment for the full rationale.
   "scam.eyebrow": "फसवणुकीपासून बचाव",

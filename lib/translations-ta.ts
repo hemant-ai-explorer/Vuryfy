@@ -212,6 +212,17 @@ export const ta: Record<string, string> = {
   "verdict.Suspicious": "சந்தேகத்திற்குரியது",
   "verdict.Inconclusive": "முடிவற்றது",
   "verdict.OutOfContext": "சூழலுக்கு வெளியே",
+
+  // Nov 21, 2026 — Daily Check. See the matching comment in
+  // translations.ts's `en` block for the full rationale.
+  "dailyCheck.title": "இன்றைய சரிபார்ப்பு",
+  "dailyCheck.claimLabel": "என்ன சரிபார்க்கப்பட்டது",
+  "dailyCheck.caveatsHeading": "தெரிந்துகொள்ள வேண்டியவை",
+  "dailyCheck.sourcesHeading": "ஆதாரங்கள்",
+  "dailyCheck.notFoundHeading": "சரிபார்ப்பு கிடைக்கவில்லை",
+  "dailyCheck.notFoundBody": "இந்த இணைப்பு காலாவதியாகியிருக்கலாம் அல்லது இந்த சரிபார்ப்பு இனி கிடைக்கவில்லை.",
+  "dailyCheck.openApp": "வுர்யஃபையைத் திற",
+
   // Nov 21, 2026 — SEBI check / digital-arrest / trusted-contact coverage,
   // see translations.ts's matching comment for the full rationale.
   "scam.eyebrow": "மோசடி தடுப்பு",

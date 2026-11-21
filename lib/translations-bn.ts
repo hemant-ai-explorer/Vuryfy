@@ -212,6 +212,17 @@ export const bn: Record<string, string> = {
   "verdict.Suspicious": "সন্দেহজনক",
   "verdict.Inconclusive": "অনিশ্চিত",
   "verdict.OutOfContext": "প্রসঙ্গের বাইরে",
+
+  // Nov 21, 2026 — Daily Check. See the matching comment in
+  // translations.ts's `en` block for the full rationale.
+  "dailyCheck.title": "আজকের চেক",
+  "dailyCheck.claimLabel": "কী পরীক্ষা করা হয়েছে",
+  "dailyCheck.caveatsHeading": "জানা জরুরি",
+  "dailyCheck.sourcesHeading": "উৎসসমূহ",
+  "dailyCheck.notFoundHeading": "চেক পাওয়া যায়নি",
+  "dailyCheck.notFoundBody": "এই লিংকের মেয়াদ শেষ হয়ে থাকতে পারে অথবা এই চেকটি আর উপলব্ধ নেই।",
+  "dailyCheck.openApp": "ভুরিফাই খুলুন",
+
   // Nov 21, 2026 — SEBI check / digital-arrest / trusted-contact coverage,
   // see translations.ts's matching comment for the full rationale.
   "scam.eyebrow": "প্রতারণা প্রতিরোধ",

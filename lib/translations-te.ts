@@ -212,6 +212,17 @@ export const te: Record<string, string> = {
   "verdict.Suspicious": "అనుమానాస్పదం",
   "verdict.Inconclusive": "అనిర్ధారితం",
   "verdict.OutOfContext": "సందర్భం నుండి బయట",
+
+  // Nov 21, 2026 — Daily Check. See the matching comment in
+  // translations.ts's `en` block for the full rationale.
+  "dailyCheck.title": "ఈ రోజు తనిఖీ",
+  "dailyCheck.claimLabel": "ఏమి తనిఖీ చేయబడింది",
+  "dailyCheck.caveatsHeading": "తెలుసుకోవలసినవి",
+  "dailyCheck.sourcesHeading": "మూలాలు",
+  "dailyCheck.notFoundHeading": "తనిఖీ కనుగొనబడలేదు",
+  "dailyCheck.notFoundBody": "ఈ లింక్ గడువు ముగిసి ఉండవచ్చు లేదా ఈ తనిఖీ ఇప్పుడు అందుబాటులో లేదు.",
+  "dailyCheck.openApp": "వుర్యఫై తెరవండి",
+
   // Nov 21, 2026 — SEBI check / digital-arrest / trusted-contact coverage,
   // see translations.ts's matching comment for the full rationale.
   "scam.eyebrow": "మోసం నివారణ",

@@ -395,6 +395,20 @@ const en: Dictionary = {
   "verdict.Suspicious": "Suspicious",
   "verdict.Inconclusive": "Inconclusive",
   "verdict.OutOfContext": "Out of Context",
+
+  // Nov 21, 2026 — Daily Check (see claude/architecture-decisions-
+  // addendum-2026-11-21.md, "Daily Check", in the Vuryfy project notes).
+  // Static chrome for the public /today/[slug] page; the headline/
+  // summary/caveats content itself is per-entry data, not a translation
+  // key — see lib/daily-check.ts.
+  "dailyCheck.title": "Today's Check",
+  "dailyCheck.claimLabel": "What was checked",
+  "dailyCheck.caveatsHeading": "Worth knowing",
+  "dailyCheck.sourcesHeading": "Sources",
+  "dailyCheck.notFoundHeading": "Check not found",
+  "dailyCheck.notFoundBody": "This link may have expired or the check isn't available anymore.",
+  "dailyCheck.openApp": "Open Vuryfy",
+
   // Nov 21, 2026: multilingual coverage for the SEBI check, digital-arrest
   // checklist, and the Settings trusted-contact panel — these three
   // shipped Nov 20, 2026 English-only (an explicitly flagged gap, see
@@ -689,6 +703,16 @@ const hi: Dictionary = {
   "verdict.Suspicious": "संदिग्ध",
   "verdict.Inconclusive": "अनिर्णायक",
   "verdict.OutOfContext": "संदर्भ से बाहर",
+
+  // Nov 21, 2026 — Daily Check. See the matching comment in `en` above.
+  "dailyCheck.title": "आज की जांच",
+  "dailyCheck.claimLabel": "क्या जांचा गया",
+  "dailyCheck.caveatsHeading": "जानने योग्य बातें",
+  "dailyCheck.sourcesHeading": "स्रोत",
+  "dailyCheck.notFoundHeading": "जांच नहीं मिली",
+  "dailyCheck.notFoundBody": "यह लिंक समाप्त हो गया हो सकता है या यह जांच अब उपलब्ध नहीं है।",
+  "dailyCheck.openApp": "वुर्यफाई खोलें",
+
   // Nov 21, 2026 — see the matching comment in `en` above.
   "scam.eyebrow": "धोखाधड़ी से बचाव",
   "nav.freeCredits": "फ़्री — कोई क्रेडिट इस्तेमाल नहीं हुआ",
