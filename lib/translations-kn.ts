@@ -279,4 +279,10 @@ export const kn: Record<string, string> = {
   "settings.trustedContactPhonePlaceholder": "ಅವರ ಫೋನ್ ಸಂಖ್ಯೆ (ಉದಾ. 98XXXXXXXX)",
   "settings.saveContact": "ಸಂಪರ್ಕ ಉಳಿಸಿ",
   "settings.trustedContactSavedHint": "ಉಳಿಸಲಾಗಿದೆ — ಇದನ್ನು ತೆಗೆದುಹಾಕಲು ಎರಡೂ ಕ್ಷೇತ್ರಗಳನ್ನು ಖಾಲಿ ಮಾಡಿ ಮತ್ತೆ ಉಳಿಸಿ.",
+  // Nov 21, 2026 (follow-up): the home-screen menu buttons linking to
+  // these two features were also missed in the original Nov 20 gap —
+  // present in en/hi but not here.
+  "home.verifySebi": "ಸೆಬಿ ನೋಂದಣಿ ಪರಿಶೀಲಿಸಿ",
+  "home.verifyDigitalArrest": "ವಂಚನೆ ಕರೆ ಪರಿಶೀಲನೆ",
+  "home.free": "ಉಚಿತ",
 };

@@ -273,4 +273,10 @@ export const ml: Record<string, string> = {
   "settings.trustedContactPhonePlaceholder": "അവരുടെ ഫോൺ നമ്പർ (ഉദാ. 98XXXXXXXX)",
   "settings.saveContact": "കോൺടാക്റ്റ് സംരക്ഷിക്കുക",
   "settings.trustedContactSavedHint": "സംരക്ഷിച്ചു — ഇത് നീക്കം ചെയ്യാൻ രണ്ട് ഫീൽഡുകളും മായ്ച്ച് വീണ്ടും സംരക്ഷിക്കുക.",
+  // Nov 21, 2026 (follow-up): the home-screen menu buttons linking to
+  // these two features were also missed in the original Nov 20 gap —
+  // present in en/hi but not here.
+  "home.verifySebi": "സെബി രജിസ്ട്രേഷൻ പരിശോധിക്കുക",
+  "home.verifyDigitalArrest": "തട്ടിപ്പ് കോൾ പരിശോധന",
+  "home.free": "സൗജന്യം",
 };

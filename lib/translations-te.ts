@@ -273,4 +273,10 @@ export const te: Record<string, string> = {
   "settings.trustedContactPhonePlaceholder": "వారి ఫోన్ నంబర్ (ఉదా. 98XXXXXXXX)",
   "settings.saveContact": "కాంటాక్ట్‌ను సేవ్ చేయండి",
   "settings.trustedContactSavedHint": "సేవ్ చేయబడింది — దీన్ని తీసివేయడానికి రెండు ఫీల్డ్‌లను క్లియర్ చేసి మళ్లీ సేవ్ చేయండి.",
+  // Nov 21, 2026 (follow-up): the home-screen menu buttons linking to
+  // these two features were also missed in the original Nov 20 gap —
+  // present in en/hi but not here.
+  "home.verifySebi": "సెబీ నమోదును ధృవీకరించండి",
+  "home.verifyDigitalArrest": "మోస కాల్ తనిఖీ",
+  "home.free": "ఉచితం",
 };

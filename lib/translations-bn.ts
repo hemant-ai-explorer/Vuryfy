@@ -273,4 +273,10 @@ export const bn: Record<string, string> = {
   "settings.trustedContactPhonePlaceholder": "তাদের ফোন নম্বর (যেমন 98XXXXXXXX)",
   "settings.saveContact": "পরিচিতি সংরক্ষণ করুন",
   "settings.trustedContactSavedHint": "সংরক্ষিত হয়েছে — এটি সরাতে উভয় ফিল্ড খালি করে আবার সংরক্ষণ করুন।",
+  // Nov 21, 2026 (follow-up): the home-screen menu buttons linking to
+  // these two features were also missed in the original Nov 20 gap —
+  // present in en/hi but not here.
+  "home.verifySebi": "সেবি নিবন্ধন যাচাই করুন",
+  "home.verifyDigitalArrest": "স্ক্যাম কল পরীক্ষা",
+  "home.free": "বিনামূল্যে",
 };
