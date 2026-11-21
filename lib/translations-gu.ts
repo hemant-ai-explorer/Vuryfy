@@ -212,6 +212,17 @@ export const gu: Record<string, string> = {
   "verdict.Suspicious": "શંકાસ્પદ",
   "verdict.Inconclusive": "અનિર્ણિત",
   "verdict.OutOfContext": "સંદર્ભની બહાર",
+
+  // Nov 21, 2026 — Daily Check. See the matching comment in
+  // translations.ts's `en` block for the full rationale.
+  "dailyCheck.title": "આજની ચકાસણી",
+  "dailyCheck.claimLabel": "શું ચકાસવામાં આવ્યું",
+  "dailyCheck.caveatsHeading": "જાણવા જેવી બાબતો",
+  "dailyCheck.sourcesHeading": "સ્ત્રોતો",
+  "dailyCheck.notFoundHeading": "ચકાસણી મળી નથી",
+  "dailyCheck.notFoundBody": "આ લિંકની સમયસીમા સમાપ્ત થઈ ગઈ હોઈ શકે છે અથવા આ ચકાસણી હવે ઉપલબ્ધ નથી.",
+  "dailyCheck.openApp": "વુર્યફાઈ ખોલો",
+
   // Nov 21, 2026 — SEBI check / digital-arrest / trusted-contact coverage,
   // see translations.ts's matching comment for the full rationale.
   "scam.eyebrow": "છેતરપિંડી સામે સુરક્ષા",

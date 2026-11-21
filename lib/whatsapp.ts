@@ -94,3 +94,98 @@ export async function downloadTwilioMedia(
   const contentType = res.headers.get("content-type") || "application/octet-stream";
   return { bytes, contentType };
 }
+
+// --- Daily Check outbound WhatsApp send — Nov 21, 2026 ---
+// Deliberately a SEPARATE flag from WHATSAPP_FEATURE_ENABLED above —
+// that one gates the paused user-facing submission feature (inbound
+// linking + webhook, off since Sept 19, 2026). This is a different
+// capability the app never had before: proactively messaging a specific
+// number (Hemant's own, for now) rather than replying to an inbound
+// message. Kept separate so re-enabling the submission feature later
+// never silently turns this on too, and vice versa.
+//
+// Starts false — flip to true once a WhatsApp message template for this
+// is approved via Twilio/Meta (see claude/architecture-decisions-
+// addendum-2026-11-21.md, "Daily Check", in the Vuryfy project notes for
+// the setup this depends on). Until then, the daily cron job
+// (app/api/cron/daily-check/route.ts) still runs the full pipeline and
+// publishes the /today/<slug> page every day — this flag only controls
+// whether the WhatsApp push itself actually fires, so the rest of the
+// feature is fully testable before the Twilio side is ready.
+export const DAILY_CHECK_WHATSAPP_SEND_ENABLED = false;
+
+export interface SendWhatsAppResult {
+  ok: boolean;
+  error?: string;
+}
+
+// Sends one outbound WhatsApp message via Twilio's REST API (hand-rolled
+// fetch call, same "no twilio npm package for one HTTP call" reasoning as
+// verifyTwilioSignature above). Two modes:
+//
+// - Template mode (the real, production path): set
+//   TWILIO_DAILY_CHECK_CONTENT_SID to an approved Twilio Content API
+//   template SID. Required because WhatsApp does not let a business
+//   message someone first with free-form text outside an open 24-hour
+//   session — an approved template is the only reliable way to deliver
+//   this on a fixed daily schedule, every day, without the recipient
+//   having to message first to "open the door."
+// - Freeform mode (pre-template testing only): if
+//   TWILIO_DAILY_CHECK_CONTENT_SID is unset, sends plain Body text
+//   instead. This only actually reaches the recipient inside an open
+//   session window (e.g. right after they've messaged the sending number
+//   themselves), so it's useful for testing the pipeline end-to-end
+//   before template approval exists, not for the real unattended daily
+//   schedule.
+export async function sendWhatsAppMessage(params: {
+  to: string; // E.164, e.g. "+919999999999"
+  body: string; // used as the message in freeform mode
+  templateVariables?: Record<string, string>; // "1"/"2"/... for the approved template's {{1}}/{{2}}/...
+}): Promise<SendWhatsAppResult> {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const fromNumber = process.env.TWILIO_DAILY_CHECK_FROM_NUMBER;
+  const contentSid = process.env.TWILIO_DAILY_CHECK_CONTENT_SID;
+
+  if (!accountSid || !authToken || !fromNumber) {
+    return {
+      ok: false,
+      error: "TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_DAILY_CHECK_FROM_NUMBER not fully configured.",
+    };
+  }
+
+  const form = new URLSearchParams();
+  form.set("From", `whatsapp:${fromNumber}`);
+  form.set("To", `whatsapp:${params.to}`);
+  if (contentSid) {
+    form.set("ContentSid", contentSid);
+    if (params.templateVariables) {
+      form.set("ContentVariables", JSON.stringify(params.templateVariables));
+    }
+  } else {
+    form.set("Body", params.body);
+  }
+
+  const auth = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
+  let response: Response;
+  try {
+    response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${auth}`,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: form.toString(),
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (err) {
+    return { ok: false, error: `Twilio request failed: ${err instanceof Error ? err.message : String(err)}` };
+  }
+
+  if (!response.ok) {
+    const bodyText = await response.text().catch(() => "");
+    return { ok: false, error: `Twilio API error ${response.status}: ${bodyText.slice(0, 500)}` };
+  }
+
+  return { ok: true };
+}

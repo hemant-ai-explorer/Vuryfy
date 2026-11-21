@@ -212,6 +212,17 @@ export const ml: Record<string, string> = {
   "verdict.Suspicious": "സംശയാസ്പദം",
   "verdict.Inconclusive": "അനിർണ്ണായകം",
   "verdict.OutOfContext": "സന്ദർഭത്തിന് പുറത്ത്",
+
+  // Nov 21, 2026 — Daily Check. See the matching comment in
+  // translations.ts's `en` block for the full rationale.
+  "dailyCheck.title": "ഇന്നത്തെ പരിശോധന",
+  "dailyCheck.claimLabel": "എന്താണ് പരിശോധിച്ചത്",
+  "dailyCheck.caveatsHeading": "അറിഞ്ഞിരിക്കേണ്ടവ",
+  "dailyCheck.sourcesHeading": "സ്രോതസ്സുകൾ",
+  "dailyCheck.notFoundHeading": "പരിശോധന കണ്ടെത്തിയില്ല",
+  "dailyCheck.notFoundBody": "ഈ ലിങ്ക് കാലഹരണപ്പെട്ടിരിക്കാം അല്ലെങ്കിൽ ഈ പരിശോധന ഇപ്പോൾ ലഭ്യമല്ല.",
+  "dailyCheck.openApp": "വുര്യഫൈ തുറക്കുക",
+
   // Nov 21, 2026 — SEBI check / digital-arrest / trusted-contact coverage,
   // see translations.ts's matching comment for the full rationale.
   "scam.eyebrow": "തട്ടിപ്പ് പ്രതിരോധം",

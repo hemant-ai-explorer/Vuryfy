@@ -218,6 +218,17 @@ export const kn: Record<string, string> = {
   "verdict.Suspicious": "ಸಂಶಯಾಸ್ಪದ",
   "verdict.Inconclusive": "ಅನಿರ್ಣಾಯಕ",
   "verdict.OutOfContext": "ಸಂದರ್ಭದಿಂದ ಹೊರಗೆ",
+
+  // Nov 21, 2026 — Daily Check. See the matching comment in
+  // translations.ts's `en` block for the full rationale.
+  "dailyCheck.title": "ಇಂದಿನ ಪರಿಶೀಲನೆ",
+  "dailyCheck.claimLabel": "ಏನನ್ನು ಪರಿಶೀಲಿಸಲಾಗಿದೆ",
+  "dailyCheck.caveatsHeading": "ತಿಳಿದುಕೊಳ್ಳಬೇಕಾದ ಸಂಗತಿಗಳು",
+  "dailyCheck.sourcesHeading": "ಮೂಲಗಳು",
+  "dailyCheck.notFoundHeading": "ಪರಿಶೀಲನೆ ಕಂಡುಬಂದಿಲ್ಲ",
+  "dailyCheck.notFoundBody": "ಈ ಲಿಂಕ್ ಅವಧಿ ಮುಗಿದಿರಬಹುದು ಅಥವಾ ಈ ಪರಿಶೀಲನೆ ಇನ್ನು ಲಭ್ಯವಿಲ್ಲ.",
+  "dailyCheck.openApp": "ವುರ್ಯಫೈ ತೆರೆಯಿರಿ",
+
   // Nov 21, 2026 — SEBI check / digital-arrest / trusted-contact coverage,
   // see translations.ts's matching comment for the full rationale.
   "scam.eyebrow": "ವಂಚನೆ ತಡೆಗಟ್ಟುವಿಕೆ",

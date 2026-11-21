@@ -89,6 +89,16 @@ const EXCLUDED_DIRS = [
     real: path.join(root, "app", "share"),
     backup: path.join(root, ".capacitor-build-tmp-share"),
   },
+  // Nov 21, 2026 — Daily Check's public detail page (app/today/[slug]),
+  // same reason as app/share above: a dynamic route with no
+  // generateStaticParams(), meant to be opened from outside the app
+  // (a forwarded WhatsApp message) rather than bundled into the native
+  // shell. See claude/architecture-decisions-addendum-2026-11-21.md,
+  // "Daily Check", in the Vuryfy project notes.
+  {
+    real: path.join(root, "app", "today"),
+    backup: path.join(root, ".capacitor-build-tmp-today"),
+  },
 ];
 
 const configPath = path.join(root, "next.config.ts");
