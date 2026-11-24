@@ -19,12 +19,28 @@ import { apiFetch } from "@/lib/api-fetch";
 // built" entry, replacing the Sept 16 combined-OTP-flow design below).
 // `?intent=signup` vs `?intent=signin` now changes real field behavior, not
 // just copy:
-//   - signup: the first screen collects Name + Language + Phone together.
-//     After OTP verifies, both are saved directly against /api/preferences
-//     (bypassing useLanguage()'s setLanguage(), which only accepts a
-//     language) and the user is sent straight to /onboarding/payment — a
-//     brand-new account never has an existing language preference, so there
-//     is no need to run it through the hasPreference-based picker below.
+//   - signup: the first screen collects Language + Phone only (Nov 24,
+//     2026: the Name field was dropped — it was write-only, never read or
+//     displayed anywhere in the app, and the signup correction below
+//     removed the only other screen signup used to pass through, so the
+//     flow is now the "just a phone number and preferred language" the
+//     locked Correction #2 spec in marketing-site-2026-09-19.md calls for).
+//     After OTP verifies, the language is saved directly against
+//     /api/preferences (bypassing useLanguage()'s setLanguage(), which only
+//     accepts a language after an existing session — this call needs to
+//     work on a session that only just became valid), the Starter plan's
+//     free intro allowance (5 Quick Checks) is granted silently via
+//     /api/subscribe so the account has real credits from the first
+//     second, and the user goes straight to "/" — no plan-choice or
+//     payment screen. Per Correction #2, actual plan choice *and* payment
+//     collection are deferred together to the real trigger moment (6th
+//     Quick Check, 1st Deep Investigation, or start of month 2) — not
+//     built yet, this just removes the fake "choose a plan" friction that
+//     had nothing to do with payment anyway (app/onboarding/payment/page.tsx
+//     was a free dev-mode stub, no card was ever collected there). A
+//     brand-new account never has an existing language preference, so
+//     there is no need to run it through the hasPreference-based picker
+//     below.
 //   - signin (or no intent, e.g. a bookmarked /login): unchanged from the
 //     original design — phone + OTP only. Right after OTP verification, this
 //     checks whether the user already has a stored language preference (via
@@ -43,7 +59,6 @@ function LoginForm() {
   const supabase = createClient();
   const searchParams = useSearchParams();
   const { t, hasPreference, setLanguage, refresh } = useLanguage();
-  const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [otpVerified, setOtpVerified] = useState(false);
@@ -112,21 +127,38 @@ function LoginForm() {
     }
 
     if (isSignup) {
-      // Combined Name + Language + Phone signup: save both in one direct
-      // call against /api/preferences (it accepts an optional full_name
-      // alongside language specifically for this screen — see that route's
-      // header comment) rather than useLanguage()'s setLanguage(), which
-      // only takes a language. A brand-new signup never has an existing
-      // preference, so this skips the hasPreference branch below entirely
-      // and goes straight to the plan-selection stub.
+      // Language + Phone signup: save the language in one direct call
+      // against /api/preferences rather than useLanguage()'s setLanguage(),
+      // which only takes a language after an existing session — this call
+      // needs to work on a session that only just became valid. A
+      // brand-new signup never has an existing preference, so this skips
+      // the hasPreference branch below entirely.
       try {
         await apiFetch("/api/preferences", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ language: selectedLanguage, full_name: name.trim() }),
+          body: JSON.stringify({ language: selectedLanguage }),
         });
       } catch (err) {
-        console.error("[login] saving signup name/language failed:", err);
+        console.error("[login] saving signup language failed:", err);
+      }
+      // Nov 24, 2026: silently grant the Starter plan's free intro
+      // allowance (5 Quick Checks) right here instead of sending the user
+      // to a "choose your plan" screen first — see the header comment
+      // above. Reuses the existing /api/subscribe endpoint (same grant it
+      // already does when a user picks a plan by hand), just triggered
+      // automatically with plan_99 rather than by a button click. Non-fatal
+      // if it fails — the account still exists and /api/me already reads
+      // zeros when there's no active subscription, so a signup isn't
+      // blocked by a transient grant failure; worth alerting on in prod.
+      try {
+        await apiFetch("/api/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ plan_code: "plan_99" }),
+        });
+      } catch (err) {
+        console.error("[login] auto-granting starter plan failed:", err);
       }
       posthog.capture("user_signed_up", { language: selectedLanguage });
       // justAuthenticated=true — see language-provider.tsx's refresh() header
@@ -135,7 +167,7 @@ function LoginForm() {
       // 401 here should retry rather than fail open to "no preference".
       await refresh(true);
       setLoading(false);
-      router.push("/onboarding/payment");
+      router.push("/");
       router.refresh();
       return;
     }
@@ -224,25 +256,17 @@ function LoginForm() {
           {!otpSent ? (
             <>
               {isSignup && (
-                <>
-                  {/* Hardcoded English strings, not run through
-                      lib/translations.ts — same "flagged, known i18n gap"
-                      convention already used elsewhere (e.g. the WhatsApp UI
-                      panels) for new pieces added outside the original
-                      9-language rollout. */}
-                  <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
-                  <select
-                    value={selectedLanguage}
-                    onChange={(e) => setSelectedLanguage(e.target.value as Language)}
-                    aria-label={t("settings.languageLabel")}
-                  >
-                    {SUPPORTED_LANGUAGES.map((lang) => (
-                      <option key={lang.code} value={lang.code}>
-                        {lang.nativeLabel}
-                      </option>
-                    ))}
-                  </select>
-                </>
+                <select
+                  value={selectedLanguage}
+                  onChange={(e) => setSelectedLanguage(e.target.value as Language)}
+                  aria-label={t("settings.languageLabel")}
+                >
+                  {SUPPORTED_LANGUAGES.map((lang) => (
+                    <option key={lang.code} value={lang.code}>
+                      {lang.nativeLabel}
+                    </option>
+                  ))}
+                </select>
               )}
               <input
                 value={phone}
@@ -250,10 +274,7 @@ function LoginForm() {
                 placeholder={t("login.phonePlaceholder")}
                 inputMode="tel"
               />
-              <button
-                disabled={loading || phone.trim().length < 10 || (isSignup && name.trim().length === 0)}
-                onClick={requestOtp}
-              >
+              <button disabled={loading || phone.trim().length < 10} onClick={requestOtp}>
                 {loading ? t("login.sending") : t("login.continue")}
               </button>
             </>

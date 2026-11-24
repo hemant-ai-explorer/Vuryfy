@@ -4,15 +4,30 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { apiFetch } from "@/lib/api-fetch";
 
-// Stub "choose your plan" step — Sept 19, 2026. Last step of the new
-// signup flow (Name + Language + Phone → OTP → this page — see
-// app/login/page.tsx and architecture-decisions-addendum-2026-09-19.md's
-// "Signup flow redesign, built" entry). Per the user's explicit choice, this
-// is a clearly-labeled development-mode stub rather than a real Razorpay
-// checkout (no payment gateway exists anywhere in this codebase yet — see
-// the same addendum) — picking a plan calls /api/subscribe, which grants
-// the plan's intro credit allowance immediately, as if payment had already
-// gone through.
+// Stub "choose your plan" step — Sept 19, 2026.
+//
+// ORPHANED as of Nov 24, 2026 — nothing in the app links here anymore.
+// app/login/page.tsx's signup flow used to route here after OTP verify;
+// it now grants the Starter plan's intro allowance silently (see that
+// file's header comment) and goes straight to "/" instead, per the locked
+// Correction #2 spec in marketing-site-2026-09-19.md ("just phone +
+// language" at signup, no plan-choice screen). Left in place, unlinked,
+// as a reference for whoever builds the real plan-choice + payment screen
+// that's supposed to appear at the actual trigger moment (6th Quick Check,
+// 1st Deep Investigation, or start of month 2) — that screen will look a
+// lot like this one, just reachable from a different place and with a
+// real payment step added. Delete once that real screen exists, or sooner
+// if it's confusing to leave around.
+//
+// Original Sept 19, 2026 note, still accurate about what this page itself
+// does: last step of the signup flow at the time (Name + Language + Phone
+// → OTP → this page — see architecture-decisions-addendum-2026-09-19.md's
+// "Signup flow redesign, built" entry). Per the user's explicit choice,
+// this is a clearly-labeled development-mode stub rather than a real
+// Razorpay checkout (no payment gateway exists anywhere in this codebase
+// yet — see the same addendum) — picking a plan calls /api/subscribe,
+// which grants the plan's intro credit allowance immediately, as if
+// payment had already gone through.
 //
 // Only Starter (₹99) and Power (₹199) are shown — the Instagram/Facebook
 // Premium variants from the same addendum are a separate, explicitly
