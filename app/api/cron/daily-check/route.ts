@@ -56,6 +56,7 @@ export async function GET(request: Request) {
     confidence: build.confidence,
     headline: build.headline,
     summary: build.summary,
+    teaser: build.teaser,
     caveats: build.caveats,
     sources: build.sources,
   });
@@ -75,11 +76,14 @@ export async function GET(request: Request) {
   const recipientLanguageRaw = process.env.DAILY_CHECK_RECIPIENT_LANGUAGE || "en";
   const recipientLanguage: Language = isSupportedLanguage(recipientLanguageRaw) ? recipientLanguageRaw : "en";
   const headline = build.headline[recipientLanguage] ?? build.headline.en;
-  const summary = build.summary[recipientLanguage] ?? build.summary.en;
-  // Both the headline and the full write-up go in the message itself
-  // (per the user's explicit spec), with the link last so forwarding the
-  // message also carries a way back into the app.
-  const messageBody = `${headline}\n\n${summary}\n\n${link}`;
+  const teaser = build.teaser[recipientLanguage] ?? build.teaser.en;
+  // Nov 24, 2026 revision: the message carries only the headline + a
+  // short teaser line, never the full write-up. Putting the complete
+  // explanation in the WhatsApp message (the old behavior) answered the
+  // question right there and gave the reader no reason to tap through —
+  // the teaser is a deliberate curiosity gap; the full "summary" only
+  // ever appears on the /today page behind the link.
+  const messageBody = `${headline}\n\n${teaser}\n\n${link}`;
 
   let sendResult: { ok: boolean; error?: string } = {
     ok: false,
@@ -93,7 +97,7 @@ export async function GET(request: Request) {
       sendResult = await sendWhatsAppMessage({
         to: recipient,
         body: messageBody,
-        templateVariables: { "1": headline, "2": summary, "3": link },
+        templateVariables: { "1": headline, "2": teaser, "3": link },
       });
     }
     if (!sendResult.ok) {

@@ -26,7 +26,7 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
   const admin = createAdminClient();
   const { data: row, error } = await admin
     .from("daily_checks")
-    .select("slug, claim, verdict, confidence, headline, summary, caveats, sources, published_at")
+    .select("slug, claim, verdict, confidence, headline, summary, teaser, caveats, sources, published_at")
     .eq("slug", slug)
     .lte("published_at", new Date().toISOString())
     .maybeSingle();
@@ -41,6 +41,7 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
 
   const headlineMap = (row.headline ?? {}) as Record<string, string>;
   const summaryMap = (row.summary ?? {}) as Record<string, string>;
+  const teaserMap = (row.teaser ?? {}) as Record<string, string>;
   const caveatsMap = (row.caveats ?? {}) as Record<string, string[]>;
 
   return NextResponse.json({
@@ -50,6 +51,7 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
     confidence: row.confidence,
     headline: headlineMap[lang] ?? headlineMap.en ?? "",
     summary: summaryMap[lang] ?? summaryMap.en ?? "",
+    teaser: teaserMap[lang] ?? teaserMap.en ?? "",
     caveats: caveatsMap[lang] ?? caveatsMap.en ?? [],
     sources: row.sources ?? [],
     published_at: row.published_at,
