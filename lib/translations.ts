@@ -408,6 +408,7 @@ const en: Dictionary = {
   "dailyCheck.notFoundHeading": "Check not found",
   "dailyCheck.notFoundBody": "This link may have expired or the check isn't available anymore.",
   "dailyCheck.openApp": "Open Vuryfy",
+  "dailyCheck.openAppPrompt": "Protect yourself from scams like this one — Free",
   "dailyCheck.shareWhatsapp": "Share on WhatsApp",
 
   // Nov 21, 2026: multilingual coverage for the SEBI check, digital-arrest
@@ -713,6 +714,7 @@ const hi: Dictionary = {
   "dailyCheck.notFoundHeading": "जांच नहीं मिली",
   "dailyCheck.notFoundBody": "यह लिंक समाप्त हो गया हो सकता है या यह जांच अब उपलब्ध नहीं है।",
   "dailyCheck.openApp": "वुर्यफाई खोलें",
+  "dailyCheck.openAppPrompt": "इस जैसे घोटालों से खुद को बचाएं — मुफ़्त में",
   "dailyCheck.shareWhatsapp": "व्हाट्सएप पर शेयर करें",
 
   // Nov 21, 2026 — see the matching comment in `en` above.
