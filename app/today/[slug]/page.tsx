@@ -171,20 +171,22 @@ function DailyCheckView() {
           <a className="primary-link" href={whatsappShareHref} target="_blank" rel="noreferrer">
             {t("dailyCheck.shareWhatsapp")}
           </a>
-          {/* Nov 24, 2026: names the actual payoff ("like this one") right
-              above the signup CTA, instead of a bare "Open Vuryfy" link
-              into a generic pitch screen — this is the highest-intent
-              moment in the whole page, right after the reader has just
-              seen a real scam explained. Links straight to the signup
-              intent rather than "/" for the same reason: a reader who
-              just read a Daily Check already has the context a first-time
-              visitor would otherwise need from the landing page. */}
-          <p className="sub" style={{ textAlign: "center", margin: "2px 0 0" }}>
-            {t("dailyCheck.openAppPrompt")}
-          </p>
+          {/* Nov 24, 2026: links straight to the signup intent rather than
+              "/" — a reader who just read a Daily Check already has the
+              context a first-time visitor would otherwise need from the
+              landing page. The tagline below names the actual payoff
+              ("like this one") right under the button instead of a bare
+              "Open Vuryfy" leading into a generic pitch screen — this is
+              the highest-intent moment in the whole page, right after the
+              reader has just seen a real scam explained. Button placed
+              above the tagline (not below) per the user's explicit
+              ordering preference. */}
           <Link className="primary-link" href="/login?intent=signup">
             {t("dailyCheck.openApp")}
           </Link>
+          <p className="sub" style={{ textAlign: "center", margin: "2px 0 0" }}>
+            {t("dailyCheck.openAppPrompt")}
+          </p>
         </div>
       </section>
     </main>
