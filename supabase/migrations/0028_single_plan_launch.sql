@@ -1,0 +1,17 @@
+-- Nov 24, 2026 — user's explicit decision: "for starting i just want one
+-- plan." Keep only Starter (plan_99, ₹99/month) as an active, offerable
+-- plan for now. Power (plan_299, ₹199/month) is hidden, not deleted —
+-- is_active already exists on this table (0001_init.sql) specifically so
+-- a plan can be taken out of circulation without losing its row, its
+-- pricing history, or any future subscriptions already tied to it via the
+-- plan_code foreign key on public.subscriptions.
+--
+-- Nothing currently references plan_299 in a live, reachable code path —
+-- app/onboarding/payment/page.tsx (the only place that ever listed it) has
+-- been orphaned since the Nov 24, 2026 signup-flow change (see
+-- claude/signup-flow-no-plan-screen-2026-11-24.md) — but is_active is set
+-- here anyway so any future code that queries public.plans for the
+-- offerable set (e.g. the real trigger-moment payment screen, whenever
+-- it's built) reflects this decision automatically rather than needing to
+-- remember it separately.
+update public.plans set is_active = false where code = 'plan_299';
