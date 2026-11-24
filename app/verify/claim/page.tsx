@@ -130,7 +130,19 @@ function ClaimForm() {
         body: JSON.stringify({ claim: claim.trim(), input_type: "text" }),
       });
       const d = await parseJsonResponse(r);
-      if (!r.ok) throw new Error(d.error || (mode === "quick" ? "Verification failed" : "Investigation failed"));
+      if (!r.ok) {
+        // Billing engine, Phase 1a (Nov 24, 2026) — app/api/verify and
+        // app/api/deep return this specific shape when a billing trigger
+        // just fired (see lib/billing-gate.ts), instead of the generic
+        // out-of-credits message. Route straight to the payment screen
+        // rather than showing the raw error string inline.
+        if (d.error === "payment_required" && d.redirect) {
+          const q = d.trigger ? `?trigger=${encodeURIComponent(d.trigger)}` : "";
+          router.push(`${d.redirect}${q}`);
+          return;
+        }
+        throw new Error(d.error || (mode === "quick" ? "Verification failed" : "Investigation failed"));
+      }
       sessionStorage.setItem("vuryfy_result", JSON.stringify({ ...d, return_to: backHref }));
       router.push(`/result?id=${d.id}`);
     } catch (e: any) {

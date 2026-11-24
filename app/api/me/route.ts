@@ -25,7 +25,7 @@ export async function GET() {
       .maybeSingle(),
     admin
       .from("subscriptions")
-      .select("plan_code, status, cancel_at_period_end, current_period_end")
+      .select("plan_code, status, cancel_at_period_end, current_period_end, payment_required, last_trigger")
       .eq("user_id", user.id)
       .eq("status", "active")
       .maybeSingle(),
@@ -49,6 +49,9 @@ export async function GET() {
           status: subscription.status,
           cancel_at_period_end: subscription.cancel_at_period_end,
           current_period_end: subscription.current_period_end,
+          // Billing engine, Phase 1a (Nov 24, 2026) — see lib/billing-gate.ts.
+          payment_required: subscription.payment_required ?? false,
+          last_trigger: subscription.last_trigger ?? null,
         }
       : null,
     // TEMP DEBUG — remove once the credits-showing-0 mismatch is resolved.
