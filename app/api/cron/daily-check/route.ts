@@ -66,15 +66,52 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: "Could not save today's check." }, { status: 500 });
   }
 
-  const link = `${APP_URL}/today/${build.slug}`;
+  // Which real Vuryfy phone number (if any) receives the WhatsApp push —
+  // currently always the same single test number while sending stays
+  // disabled pending WhatsApp template approval.
+  const recipient = process.env.DAILY_CHECK_RECIPIENT_NUMBER;
 
   // Which language the WhatsApp message itself is written in — a single
   // message can only be one language, unlike the /today page behind the
-  // link, which offers all 9. Defaults to English; set
-  // DAILY_CHECK_RECIPIENT_LANGUAGE (a Vuryfy language code, e.g. "hi") to
-  // change it.
-  const recipientLanguageRaw = process.env.DAILY_CHECK_RECIPIENT_LANGUAGE || "en";
-  const recipientLanguage: Language = isSupportedLanguage(recipientLanguageRaw) ? recipientLanguageRaw : "en";
+  // link, which offers all 9. Nov 24, 2026: this now follows the
+  // recipient's own Vuryfy account language — the same user_preferences
+  // row Settings and the signup language picker read/write (see
+  // app/providers/language-provider.tsx and supabase/migrations/0011_
+  // user_preferences.sql) — rather than a separate hardcoded env var.
+  // That only works today because `recipient` is one real Vuryfy account
+  // (Hemant's own, for testing), not a genuine subscriber list; a future
+  // per-user broadcast would do this same per-recipient lookup for each
+  // one individually. Falls back to DAILY_CHECK_RECIPIENT_LANGUAGE (or
+  // "en") when the recipient isn't a real Vuryfy account, or that account
+  // has never saved a language preference.
+  let recipientLanguage: Language = "en";
+  const envFallback = process.env.DAILY_CHECK_RECIPIENT_LANGUAGE || "en";
+  if (isSupportedLanguage(envFallback)) recipientLanguage = envFallback;
+  if (recipient) {
+    try {
+      const { data: profile } = await admin.from("profiles").select("id").eq("phone", recipient).maybeSingle();
+      if (profile) {
+        const { data: pref } = await admin
+          .from("user_preferences")
+          .select("language")
+          .eq("user_id", profile.id)
+          .maybeSingle();
+        if (pref && isSupportedLanguage(pref.language)) {
+          recipientLanguage = pref.language;
+        }
+      }
+    } catch (err) {
+      console.error("[daily-check] recipient language lookup failed — using fallback:", err);
+    }
+  }
+
+  // Carries the same ?lang= so tapping through opens the /today page in
+  // the exact language the WhatsApp message was sent in, rather than
+  // whatever the viewer's signed-in account defaults to (the page prefers
+  // a ?lang= query param over the account's own setting — see
+  // app/today/[slug]/page.tsx's DailyCheckView comment).
+  const link = `${APP_URL}/today/${build.slug}?lang=${recipientLanguage}`;
+
   const headline = build.headline[recipientLanguage] ?? build.headline.en;
   const teaser = build.teaser[recipientLanguage] ?? build.teaser.en;
   // Nov 24, 2026 revision: the message carries only the headline + a
@@ -89,7 +126,6 @@ export async function GET(request: Request) {
     ok: false,
     error: "Sending is disabled (DAILY_CHECK_WHATSAPP_SEND_ENABLED is false in lib/whatsapp.ts).",
   };
-  const recipient = process.env.DAILY_CHECK_RECIPIENT_NUMBER;
   if (DAILY_CHECK_WHATSAPP_SEND_ENABLED) {
     if (!recipient) {
       sendResult = { ok: false, error: "DAILY_CHECK_RECIPIENT_NUMBER is not set." };
