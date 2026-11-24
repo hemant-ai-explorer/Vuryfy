@@ -176,6 +176,13 @@ export default function Home() {
             {t("home.verifyDigitalArrest")}
             <span className="free-badge">{t("home.free")}</span>
           </Link>
+          {/* Nov 24, 2026: email/password breach check — same free-badge
+              treatment, same reasoning (near-zero marginal cost, "verify
+              before you trust" trust builder, not a credited check). */}
+          <Link className="secondary-link" href="/verify/breach-check">
+            {t("home.verifyBreachCheck")}
+            <span className="free-badge">{t("home.free")}</span>
+          </Link>
         </div>
         <div className="balance-card">
           <div>

@@ -83,6 +83,10 @@ export default function VerifyPage() {
           On a scary call right now?{" "}
           <Link href="/verify/digital-arrest">Check the warning signs — free</Link>
         </p>
+        <p className="hint">
+          Using the same password everywhere?{" "}
+          <Link href="/verify/breach-check">Check if your email or password has leaked — free</Link>
+        </p>
       </section>
     </main>
   );
