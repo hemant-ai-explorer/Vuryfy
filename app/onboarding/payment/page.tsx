@@ -29,10 +29,17 @@ import { apiFetch } from "@/lib/api-fetch";
 // which grants the plan's intro credit allowance immediately, as if
 // payment had already gone through.
 //
-// Only Starter (₹99) and Power (₹199) are shown — the Instagram/Facebook
-// Premium variants from the same addendum are a separate, explicitly
-// deferred piece of work ("we will keep this for later") and aren't
-// purchasable yet.
+// Only Starter (₹99) is shown as of Nov 24, 2026 — user's explicit
+// decision: "for starting i just want one plan." Power (₹199) is hidden,
+// not deleted (supabase/migrations/0028_single_plan_launch.sql sets its
+// is_active flag to false on public.plans rather than removing the row),
+// so re-enabling it later is a data change, not a rebuild. This page is
+// already orphaned (see its header note above), so this edit is really
+// just keeping the reference stub honest for whoever builds the real
+// plan-choice + payment screen later — it shouldn't reintroduce a second
+// plan without that also being a deliberate decision at the time. The
+// Instagram/Facebook Premium variants from the Sept 19 addendum remain a
+// separate, explicitly deferred piece of work either way.
 //
 // Auth-gated the same way app/settings/page.tsx is: a client-side
 // supabase.auth.getUser() check that bounces to /login if there's no
@@ -59,13 +66,9 @@ const PLANS: {
     headline: "30 Quick Checks + 2 Deep Investigations / month",
     detail: "5 free Quick Checks to start, then the full monthly allowance from month 2 (no rollover).",
   },
-  {
-    code: "plan_299",
-    name: "Power",
-    priceInr: 199,
-    headline: "75 Quick Checks + 5 Deep Investigations / month",
-    detail: "5 free Quick Checks to start, then the full monthly allowance from month 2 (no rollover).",
-  },
+  // Power (plan_299, ₹199) deliberately left out — see the header comment
+  // above. Its is_active flag is false in the database; add it back here
+  // if that ever changes.
 ];
 
 export default function OnboardingPaymentPage() {
