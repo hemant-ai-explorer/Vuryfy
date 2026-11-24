@@ -15,6 +15,7 @@ import {
   type CachedVerification,
 } from "@/lib/verification-cache";
 import { track } from "@/lib/analytics";
+import { checkBillingGate } from "@/lib/billing-gate";
 
 // Route-level execution budget (Sept 2026 fix — see app/api/deep/route.ts's
 // comment for the full rationale). 60 is Hobby's max; without it Vercel's
@@ -134,6 +135,24 @@ export async function POST(request: Request) {
     );
   }
   if (remaining === null || remaining === undefined) {
+    // Billing engine, Phase 1a (Nov 24, 2026) — see lib/billing-gate.ts's
+    // header for the full design. A zero-credit Quick Check during a
+    // user's intro month is Correction #2's "6th Quick Check" trigger —
+    // same trigger regardless of whether this request asked for the
+    // 1-credit or 2-credit (registered-name) variant.
+    const gate = await checkBillingGate(admin, user.id, "quick_check_6");
+    if (gate.status === "payment_required") {
+      track(user.id, "payment_required", {
+        mode: "quick",
+        credit_type: "quick_check",
+        trigger: gate.trigger,
+      });
+      return NextResponse.json(
+        { error: "payment_required", trigger: gate.trigger, redirect: "/billing" },
+        { status: 402 }
+      );
+    }
+
     track(user.id, "credits_exhausted", { mode: "quick", credit_type: "quick_check" });
     return NextResponse.json(
       { error: "You're out of Quick Check credits. Upgrade your plan to continue." },
