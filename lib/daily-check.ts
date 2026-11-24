@@ -50,6 +50,7 @@ export interface DailyCheckBuild {
   confidence: number;
   headline: Record<string, string>;
   summary: Record<string, string>;
+  teaser: Record<string, string>;
   caveats: Record<string, string[]>;
   sources: { title: string; url: string }[];
 }
@@ -139,6 +140,7 @@ async function pickCredibleTopic(): Promise<string | null> {
 interface LocalizedEntry {
   headline: string;
   summary: string;
+  teaser: string;
   caveats: string[];
 }
 
@@ -150,9 +152,10 @@ function localizationSchema() {
       properties: {
         headline: { type: "string" },
         summary: { type: "string" },
+        teaser: { type: "string" },
         caveats: { type: "array", items: { type: "string" } },
       },
-      required: ["headline", "summary", "caveats"],
+      required: ["headline", "summary", "teaser", "caveats"],
     };
   }
   return {
@@ -163,14 +166,15 @@ function localizationSchema() {
 }
 
 function buildLocalizeSystemPrompt(): string {
-  return `You are preparing Vuryfy's published Daily Check for display in 9 languages. You are given a claim that Vuryfy's Deep Investigation engine already investigated, plus the verdict, confidence, English explanation, and English caveats it already produced from real evidence. Do NOT change the verdict, do NOT add any new claim or evidence beyond what is given — your only job is to adapt and translate.
+  return `You are preparing Vuryfy's published Daily Check for display in 9 languages. You are given a claim that Vuryfy's Deep Investigation engine already investigated, plus the verdict, confidence, English explanation, and English caveats it already produced from real evidence. Do NOT change the verdict, do NOT add any new claim or evidence beyond what is given — your only job is to adapt, translate, and (for "teaser" only) condense.
 
 For EACH of these language codes — ${LANGUAGE_CODE_LEGEND} — produce:
 - "headline": one short, plain, accurate sentence (well under 100 characters) in that language, naming what was checked and the verdict. This is what gets sent as a WhatsApp message header, so it must be immediately clear on its own, with no jargon.
-- "summary": the given English explanation, naturally and fluently adapted into that language (same meaning and level of detail — not shortened, not embellished).
+- "summary": the given English explanation, naturally and fluently adapted into that language (same meaning and level of detail — not shortened, not embellished). This is shown in full on the /today page, never in the WhatsApp message itself.
+- "teaser": ONE short line (under 140 characters) in that language that gives someone a real reason to tap through and read the full explanation — e.g. why this matters, how widely it's spreading, or what's at stake if someone believes it. This is what actually gets sent as the WhatsApp message's second line, so it must NOT explain the reasoning or summarize the evidence (that would remove any reason to click the link) and must NOT just restate the headline's verdict. Think of it as a hook, not an answer.
 - "caveats": the given English caveats list, translated into that language in the same order. Return an empty array if the given caveats list is empty.
 
-For "en" itself, "summary" and "caveats" should carry the given English text through essentially unchanged (fix only obvious grammar if needed) — you still need to write its "headline".`;
+For "en" itself, "summary" and "caveats" should carry the given English text through essentially unchanged (fix only obvious grammar if needed) — you still need to write its "headline" and "teaser".`;
 }
 
 function buildSlug(claim: string): string {
@@ -227,15 +231,17 @@ export async function buildDailyCheck(): Promise<DailyCheckBuild | null> {
 
   const headline: Record<string, string> = {};
   const summary: Record<string, string> = {};
+  const teaser: Record<string, string> = {};
   const caveats: Record<string, string[]> = {};
   for (const lang of LANGUAGE_CODES) {
     const entry = localized[lang];
-    if (!entry || typeof entry.headline !== "string" || typeof entry.summary !== "string") {
+    if (!entry || typeof entry.headline !== "string" || typeof entry.summary !== "string" || typeof entry.teaser !== "string") {
       console.error(`[daily-check] localization missing/malformed for "${lang}" — skipping today rather than publishing a partial entry.`);
       return null;
     }
     headline[lang] = entry.headline.trim();
     summary[lang] = entry.summary.trim();
+    teaser[lang] = entry.teaser.trim();
     caveats[lang] = Array.isArray(entry.caveats) ? entry.caveats.filter((c) => typeof c === "string" && c.trim()) : [];
   }
 
@@ -246,6 +252,7 @@ export async function buildDailyCheck(): Promise<DailyCheckBuild | null> {
     confidence: investigation.confidence,
     headline,
     summary,
+    teaser,
     caveats,
     sources: investigation.sources,
   };

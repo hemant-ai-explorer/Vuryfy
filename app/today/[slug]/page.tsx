@@ -28,6 +28,7 @@ interface DailyCheckDetail {
   confidence: number;
   headline: string;
   summary: string;
+  teaser: string;
   caveats: string[];
   sources: { title: string; url: string }[];
   published_at: string;
@@ -103,6 +104,21 @@ function DailyCheckView() {
 
   const isScam = data.verdict === "Scam";
 
+  // "Forward to any WhatsApp number" — Nov 24, 2026. Deliberately a wa.me
+  // share link rather than a Vuryfy-sends-it-for-you feature: wa.me opens
+  // the READER's own WhatsApp client with this text pre-filled, and they
+  // pick any contact or group themselves from WhatsApp's own picker. That
+  // satisfies "forward to any number" directly, costs nothing, needs no
+  // backend route or auth, and — critically — never routes through
+  // Vuryfy's own WhatsApp Business number, so it carries none of the
+  // spam/reputation risk that Vuryfy-initiated messages to arbitrary
+  // third parties would carry for a newly-set-up WABA. Uses the teaser
+  // (not the full summary) so the curiosity-gap behavior is consistent
+  // between the original WhatsApp send and whatever the reader forwards.
+  const shareUrl = typeof window !== "undefined" ? window.location.href : `${process.env.NEXT_PUBLIC_APP_URL || "https://app.vuryfy.com"}/today/${data.slug}`;
+  const shareText = `${data.headline}\n\n${data.teaser}\n\n${shareUrl}`;
+  const whatsappShareHref = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+
   return (
     <main className="shell">
       <nav>
@@ -152,6 +168,9 @@ function DailyCheckView() {
         )}
 
         <div className="result-actions">
+          <a className="primary-link" href={whatsappShareHref} target="_blank" rel="noreferrer">
+            {t("dailyCheck.shareWhatsapp")}
+          </a>
           <Link className="primary-link" href="/">
             {t("dailyCheck.openApp")}
           </Link>
