@@ -1,0 +1,21 @@
+-- Billing engine, Phase 1b follow-up — Nov 25, 2026. User's explicit call:
+-- "i want the plan to be 49/month. just this one plan." Reprices the only
+-- active plan (Power/plan_299 is already hidden — see
+-- claude/single-plan-launch-2026-11-24.md) from 99 to 49 rupees.
+--
+-- Safe to do as a plain UPDATE rather than the razorpay_plan_id-reset dance
+-- described in supabase/migrations/0030_razorpay_plan_mapping.sql's header,
+-- because as of this migration no Razorpay Plan object has ever been
+-- created for plan_99 yet (Phase 1b's code was only just written, not yet
+-- configured/tested, and lib/razorpay.ts's getOrCreateRazorpayPlanId()
+-- creates the Razorpay Plan lazily on first subscribe attempt) — so
+-- plans.razorpay_plan_id is still null and the very first real subscribe
+-- attempt will create the Razorpay Plan at the new 49-rupee price
+-- automatically. If this ever needs to run AFTER a Razorpay Plan already
+-- exists for this row, add `razorpay_plan_id = null` to the SET clause
+-- below too, per 0030's repricing note.
+--
+-- Run this in the Supabase SQL Editor for BOTH vuryfy-test and vuryfy-prod,
+-- same as every other migration in this project.
+
+update public.plans set price_inr = 49 where code = 'plan_99';

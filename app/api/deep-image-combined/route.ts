@@ -11,6 +11,7 @@ import { getUserLanguage } from "@/lib/user-language";
 import { translate } from "@/lib/translations";
 import { checkContentSafety, ContentFlaggedError, hashBase64 } from "@/lib/content-safety";
 import { track } from "@/lib/analytics";
+import { checkBillingGate } from "@/lib/billing-gate";
 
 // Route-level execution budget (Sept 2026 fix — see app/api/deep/route.ts's
 // comment for the full rationale). This route runs two AI pipelines in
@@ -136,6 +137,22 @@ export async function POST(request: Request) {
     );
   }
   if (remaining === null || remaining === undefined) {
+    // Billing engine, Phase 1a (Nov 24, 2026) — see lib/billing-gate.ts's
+    // header for the full design. A zero-credit Deep Investigation during a
+    // user's intro month is Correction #2's "1st Deep Investigation" trigger.
+    const gate = await checkBillingGate(admin, user.id, "deep_investigation_1");
+    if (gate.status === "payment_required") {
+      track(user.id, "payment_required", {
+        mode: "deep",
+        credit_type: "deep_investigation",
+        trigger: gate.trigger,
+      });
+      return NextResponse.json(
+        { error: "payment_required", trigger: gate.trigger, redirect: "/billing" },
+        { status: 402 }
+      );
+    }
+
     track(user.id, "credits_exhausted", { mode: "deep", credit_type: "deep_investigation" });
     return NextResponse.json(
       { error: "You're out of Deep Investigation credits. Upgrade your plan to continue." },

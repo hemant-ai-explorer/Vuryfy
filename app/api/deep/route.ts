@@ -16,6 +16,7 @@ import { detectPaymentReceipt } from "@/lib/detect-payment-receipt";
 import { detectPaymentRequest } from "@/lib/detect-payment-request";
 import { getUserLanguage } from "@/lib/user-language";
 import { track } from "@/lib/analytics";
+import { checkBillingGate } from "@/lib/billing-gate";
 
 // Route-level execution budget (Sept 2026 fix, added across every AI-
 // calling route after the video-upload 413 investigation surfaced that
@@ -165,6 +166,25 @@ export async function POST(request: Request) {
   }
 
   if (remaining === null || remaining === undefined) {
+    // Billing engine, Phase 1a (Nov 24, 2026) — see lib/billing-gate.ts's
+    // header. Deep Investigation has no intro-month allowance at all
+    // (intro_deep_investigations = 0 for every plan, per 0001_init.sql), so
+    // this branch is reached on literally the first Deep Investigation
+    // attempt during the intro month — exactly Correction #2's "1st Deep
+    // Investigation" trigger.
+    const gate = await checkBillingGate(admin, user.id, "deep_investigation_1");
+    if (gate.status === "payment_required") {
+      track(user.id, "payment_required", {
+        mode: "deep",
+        credit_type: "deep_investigation",
+        trigger: gate.trigger,
+      });
+      return NextResponse.json(
+        { error: "payment_required", trigger: gate.trigger, redirect: "/billing" },
+        { status: 402 }
+      );
+    }
+
     track(user.id, "credits_exhausted", { mode: "deep", credit_type: "deep_investigation" });
     return NextResponse.json(
       { error: "You're out of Deep Investigation credits. Upgrade your plan to continue." },

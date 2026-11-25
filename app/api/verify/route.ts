@@ -14,6 +14,7 @@ import { detectPaymentReceipt } from "@/lib/detect-payment-receipt";
 import { detectPaymentRequest } from "@/lib/detect-payment-request";
 import { getUserLanguage } from "@/lib/user-language";
 import { track } from "@/lib/analytics";
+import { checkBillingGate } from "@/lib/billing-gate";
 
 // Route-level execution budget (Sept 2026 fix, added across every AI-
 // calling route after the video-upload 413 investigation surfaced that
@@ -194,6 +195,24 @@ export async function POST(request: Request) {
   }
 
   if (remaining === null || remaining === undefined) {
+    // Billing engine, Phase 1a (Nov 24, 2026) — see lib/billing-gate.ts's
+    // header for the full design. A zero-credit Quick Check during a
+    // user's intro month is Correction #2's "6th Quick Check" trigger; this
+    // is the one place that distinction is made before falling back to the
+    // existing generic "out of credits" response.
+    const gate = await checkBillingGate(admin, user.id, "quick_check_6");
+    if (gate.status === "payment_required") {
+      track(user.id, "payment_required", {
+        mode: "quick",
+        credit_type: "quick_check",
+        trigger: gate.trigger,
+      });
+      return NextResponse.json(
+        { error: "payment_required", trigger: gate.trigger, redirect: "/billing" },
+        { status: 402 }
+      );
+    }
+
     track(user.id, "credits_exhausted", { mode: "quick", credit_type: "quick_check" });
     return NextResponse.json(
       { error: "You're out of Quick Check credits. Upgrade your plan to continue." },

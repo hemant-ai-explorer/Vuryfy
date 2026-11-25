@@ -130,7 +130,24 @@ function ClaimForm() {
         body: JSON.stringify({ claim: claim.trim(), input_type: "text" }),
       });
       const d = await parseJsonResponse(r);
-      if (!r.ok) throw new Error(d.error || (mode === "quick" ? "Verification failed" : "Investigation failed"));
+      if (!r.ok) {
+        // Billing engine, Phase 1a trigger + Phase 1c "out of credits"
+        // catch-all (Nov 25, 2026) — ANY 402 from app/api/verify or
+        // app/api/deep means billing is blocking this request, whether it's
+        // a brand-new trigger (carries its own redirect/trigger fields) or
+        // the plain "you're out of credits" case from an exhausted or
+        // inactive subscription (lib/billing-gate.ts's "allowance_exhausted"
+        // branch, which carries neither). Previously only the former
+        // redirected — the latter just showed inert error text with no way
+        // forward. Now both send the user to the payment screen.
+        if (r.status === 402) {
+          const redirectPath = d.redirect || "/billing";
+          const q = d.trigger ? `?trigger=${encodeURIComponent(d.trigger)}` : "";
+          router.push(`${redirectPath}${q}`);
+          return;
+        }
+        throw new Error(d.error || (mode === "quick" ? "Verification failed" : "Investigation failed"));
+      }
       sessionStorage.setItem("vuryfy_result", JSON.stringify({ ...d, return_to: backHref }));
       router.push(`/result?id=${d.id}`);
     } catch (e: any) {

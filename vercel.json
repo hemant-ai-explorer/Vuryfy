@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/daily-check",
       "schedule": "30 2 * * *"
+    },
+    {
+      "path": "/api/cron/billing-trigger",
+      "schedule": "0 4 * * *"
     }
   ]
 }

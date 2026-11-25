@@ -96,6 +96,12 @@ export type AnalyticsEvent =
   | "credits_exhausted"
   // Revenue
   | "plan_subscribed"
+  // Billing engine, Phase 1a (Nov 24, 2026) — fired the moment a user hits
+  // one of Correction #2's triggers (6th Quick Check, 1st Deep
+  // Investigation, or the month-end cron) and gets gated. Separate from
+  // credits_exhausted, which still fires for the unrelated case of a
+  // paying user running out of a later month's allowance.
+  | "payment_required"
   // Part 15 tie-in — fired from inside lib/content-safety.ts's
   // checkContentSafety(), which every image/audio/video route already
   // calls, so this one call site covers all of them for free.
