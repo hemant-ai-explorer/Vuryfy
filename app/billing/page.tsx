@@ -148,6 +148,13 @@ function BillingPageInner() {
         description: `${data.display_name} — monthly subscription`,
         theme: { color: "#2563eb" },
         handler: async (response: unknown) => {
+          // Nov 25, 2026: clear any stale error from an earlier failed
+          // attempt in this same checkout session (Razorpay's modal lets
+          // the user retry with a different card/method after a
+          // payment.failed event below) — without this, a failed-then-
+          // retried-successfully flow showed "Payment received" AND the
+          // old "payment didn't go through" message at the same time.
+          setError("");
           const checkoutResponse = response as RazorpayCheckoutSuccess;
           try {
             const verifyRes = await apiFetch("/api/billing/verify-payment", {
