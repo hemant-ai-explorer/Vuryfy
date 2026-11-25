@@ -8,6 +8,7 @@ import { detectPaymentLink, type PaymentLinkInfo } from "@/lib/detect-payment-li
 import { useLanguage } from "@/app/providers/language-provider";
 import { parseJsonResponse } from "@/lib/safe-json";
 import { useElapsedSeconds } from "@/lib/use-elapsed-seconds";
+import { useCreditsTotal } from "@/lib/use-credits";
 import { apiFetch } from "@/lib/api-fetch";
 
 // QR Quick Check — the next step in the locked media-type build order
@@ -237,13 +238,19 @@ export default function VerifyQrPage() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
+  // Nov 25, 2026: live credit count in the nav bar, matching the home
+  // screen — see lib/use-credits.ts's header.
+  const creditsTotal = useCreditsTotal();
+
   return (
     <main className="shell narrow">
       <nav>
         <button className="back" onClick={() => router.push("/")}>
           {t("nav.back")}
         </button>
-        <div className="credits">{t("nav.credits")}</div>
+        <div className="credits">
+          {t("nav.credits")} · {creditsTotal ?? "…"}
+        </div>
       </nav>
       <section className="verify">
         <p className="eyebrow">{t("qr.eyebrow")}</p>

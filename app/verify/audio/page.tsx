@@ -7,6 +7,7 @@ import { prepareAudioForUpload, type PreparedAudio } from "@/lib/prepare-audio-u
 import { useLanguage } from "@/app/providers/language-provider";
 import { parseJsonResponse } from "@/lib/safe-json";
 import { useElapsedSeconds } from "@/lib/use-elapsed-seconds";
+import { useCreditsTotal } from "@/lib/use-credits";
 import { apiFetch } from "@/lib/api-fetch";
 
 // Audio input — first half of the last step in the locked media-type build
@@ -187,6 +188,9 @@ export default function VerifyAudioPage() {
   // (see app/verify/image/page.tsx's identical addition for the rationale —
   // a real user report that Quick Check felt stuck with no feedback at all).
   const quickElapsed = useElapsedSeconds(submitting === "combined-quick" || submitting === "audio-quick");
+  // Nov 25, 2026: live credit count in the nav bar, matching the home
+  // screen — see lib/use-credits.ts's header.
+  const creditsTotal = useCreditsTotal();
 
   return (
     <main className="shell narrow">
@@ -194,7 +198,9 @@ export default function VerifyAudioPage() {
         <button className="back" onClick={() => router.push("/")}>
           {t("nav.back")}
         </button>
-        <div className="credits">{t("nav.credits")}</div>
+        <div className="credits">
+          {t("nav.credits")} · {creditsTotal ?? "…"}
+        </div>
       </nav>
       <section className="verify">
         <p className="eyebrow">{t("audio.eyebrow")}</p>

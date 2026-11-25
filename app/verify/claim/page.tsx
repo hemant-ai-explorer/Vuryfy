@@ -7,6 +7,7 @@ import { useLanguage } from "@/app/providers/language-provider";
 import { parseJsonResponse } from "@/lib/safe-json";
 import { WHATSAPP_FEATURE_ENABLED } from "@/lib/whatsapp";
 import { useElapsedSeconds } from "@/lib/use-elapsed-seconds";
+import { useCreditsTotal } from "@/lib/use-credits";
 import { apiFetch } from "@/lib/api-fetch";
 
 // Unified text-entry confirm screen — Sept 16, 2026. Replaces the home
@@ -74,6 +75,9 @@ function ClaimForm() {
   // (see app/verify/image/page.tsx's identical addition for the rationale —
   // a real user report that Quick Check felt stuck with no feedback at all).
   const quickElapsed = useElapsedSeconds(submitting === "quick");
+  // Nov 25, 2026: live credit count in the nav bar, matching the home
+  // screen — see lib/use-credits.ts's header.
+  const creditsTotal = useCreditsTotal();
   // WhatsApp media-first flow (Part 13 rework, Sept 18, 2026) — see
   // supabase/migrations/0017_whatsapp_submissions.sql. A linked phone can
   // forward text/a link OR a photo (app/verify/image/page.tsx handles the
@@ -163,7 +167,9 @@ function ClaimForm() {
         <button className="back" onClick={() => router.push("/")}>
           {t("nav.back")}
         </button>
-        <div className="credits">{t("nav.credits")}</div>
+        <div className="credits">
+          {t("nav.credits")} · {creditsTotal ?? "…"}
+        </div>
       </nav>
       <section className="verify">
         <p className="eyebrow">{copy.eyebrow}</p>

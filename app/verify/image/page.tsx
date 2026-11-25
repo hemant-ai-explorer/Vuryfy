@@ -8,6 +8,7 @@ import { prepareImageForUpload, type PreparedImage } from "@/lib/prepare-image-u
 import { useLanguage } from "@/app/providers/language-provider";
 import { parseJsonResponse } from "@/lib/safe-json";
 import { useElapsedSeconds } from "@/lib/use-elapsed-seconds";
+import { useCreditsTotal } from "@/lib/use-credits";
 import { apiFetch } from "@/lib/api-fetch";
 
 // Image input — the next step in the locked media-type build order (text +
@@ -244,6 +245,9 @@ function ImageForm() {
   // Deep Investigation already solved this with a running counter; Quick
   // Check just never got the same treatment.
   const quickElapsed = useElapsedSeconds(isCheckingCombined);
+  // Nov 25, 2026: live credit count in the nav bar, matching the home
+  // screen — see lib/use-credits.ts's header.
+  const creditsTotal = useCreditsTotal();
 
   return (
     <main className="shell narrow">
@@ -251,7 +255,9 @@ function ImageForm() {
         <button className="back" onClick={() => router.push("/")}>
           {t("nav.back")}
         </button>
-        <div className="credits">{t("nav.credits")}</div>
+        <div className="credits">
+          {t("nav.credits")} · {creditsTotal ?? "…"}
+        </div>
       </nav>
       <section className="verify">
         <p className="eyebrow">{t("image.eyebrow")}</p>
