@@ -110,7 +110,19 @@ export default function VerifyVideoPage() {
         }),
       });
       const d = await parseJsonResponse(r);
-      if (!r.ok) throw new Error(d.error || (mode === "quick" ? "Check failed" : "Investigation failed"));
+      if (!r.ok) {
+        // Billing engine (Nov 25, 2026) — a 402 here means billing is
+        // blocking this check, whether from a fresh trigger or the
+        // generic "out of credits" case. Send the user to the payment
+        // screen either way instead of a dead-end error.
+        if (r.status === 402) {
+          const redirectPath = d.redirect || "/billing";
+          const q = d.trigger ? `?trigger=${encodeURIComponent(d.trigger)}` : "";
+          router.push(`${redirectPath}${q}`);
+          return;
+        }
+        throw new Error(d.error || (mode === "quick" ? "Check failed" : "Investigation failed"));
+      }
       sessionStorage.setItem("vuryfy_result", JSON.stringify({ ...d, return_to: "/verify/video" }));
       router.push(`/result?id=${d.id}`);
     } catch (e: any) {
@@ -138,7 +150,15 @@ export default function VerifyVideoPage() {
         }),
       });
       const d = await parseJsonResponse(r);
-      if (!r.ok) throw new Error(d.error || (mode === "quick" ? "Analysis failed" : "Investigation failed"));
+      if (!r.ok) {
+        if (r.status === 402) {
+          const redirectPath = d.redirect || "/billing";
+          const q = d.trigger ? `?trigger=${encodeURIComponent(d.trigger)}` : "";
+          router.push(`${redirectPath}${q}`);
+          return;
+        }
+        throw new Error(d.error || (mode === "quick" ? "Analysis failed" : "Investigation failed"));
+      }
       sessionStorage.setItem("vuryfy_result", JSON.stringify({ ...d, return_to: "/verify/video" }));
       router.push(`/result?id=${d.id}`);
     } catch (e: any) {

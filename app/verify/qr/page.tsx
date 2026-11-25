@@ -163,7 +163,19 @@ export default function VerifyQrPage() {
         body: JSON.stringify({ claim: decoded, input_type: "qr" }),
       });
       const d = await parseJsonResponse(r);
-      if (!r.ok) throw new Error(d.error || (mode === "quick" ? "Verification failed" : "Investigation failed"));
+      if (!r.ok) {
+        // Billing engine (Nov 25, 2026) — a 402 here means billing is
+        // blocking this check, whether from a fresh trigger or the
+        // generic "out of credits" case. Send the user to the payment
+        // screen either way instead of a dead-end error.
+        if (r.status === 402) {
+          const redirectPath = d.redirect || "/billing";
+          const q = d.trigger ? `?trigger=${encodeURIComponent(d.trigger)}` : "";
+          router.push(`${redirectPath}${q}`);
+          return;
+        }
+        throw new Error(d.error || (mode === "quick" ? "Verification failed" : "Investigation failed"));
+      }
       // return_to: "verify another" on the result page needs to know this
       // came from the QR upload screen, not the generic text claim form it
       // falls back to otherwise (see the Result type's return_to comment in
@@ -198,7 +210,15 @@ export default function VerifyQrPage() {
         }),
       });
       const d = await parseJsonResponse(r);
-      if (!r.ok) throw new Error(d.error || (mode === "quick" ? "Investigation failed" : "Investigation failed"));
+      if (!r.ok) {
+        if (r.status === 402) {
+          const redirectPath = d.redirect || "/billing";
+          const q = d.trigger ? `?trigger=${encodeURIComponent(d.trigger)}` : "";
+          router.push(`${redirectPath}${q}`);
+          return;
+        }
+        throw new Error(d.error || "Investigation failed");
+      }
       sessionStorage.setItem("vuryfy_result", JSON.stringify({ ...d, return_to: "/verify/qr" }));
       router.push(`/result?id=${d.id}`);
     } catch (e: any) {

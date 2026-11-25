@@ -131,14 +131,19 @@ function ClaimForm() {
       });
       const d = await parseJsonResponse(r);
       if (!r.ok) {
-        // Billing engine, Phase 1a (Nov 24, 2026) — app/api/verify and
-        // app/api/deep return this specific shape when a billing trigger
-        // just fired (see lib/billing-gate.ts), instead of the generic
-        // out-of-credits message. Route straight to the payment screen
-        // rather than showing the raw error string inline.
-        if (d.error === "payment_required" && d.redirect) {
+        // Billing engine, Phase 1a trigger + Phase 1c "out of credits"
+        // catch-all (Nov 25, 2026) — ANY 402 from app/api/verify or
+        // app/api/deep means billing is blocking this request, whether it's
+        // a brand-new trigger (carries its own redirect/trigger fields) or
+        // the plain "you're out of credits" case from an exhausted or
+        // inactive subscription (lib/billing-gate.ts's "allowance_exhausted"
+        // branch, which carries neither). Previously only the former
+        // redirected — the latter just showed inert error text with no way
+        // forward. Now both send the user to the payment screen.
+        if (r.status === 402) {
+          const redirectPath = d.redirect || "/billing";
           const q = d.trigger ? `?trigger=${encodeURIComponent(d.trigger)}` : "";
-          router.push(`${d.redirect}${q}`);
+          router.push(`${redirectPath}${q}`);
           return;
         }
         throw new Error(d.error || (mode === "quick" ? "Verification failed" : "Investigation failed"));
