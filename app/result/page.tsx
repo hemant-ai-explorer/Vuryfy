@@ -5,6 +5,7 @@ import { useLanguage } from "@/app/providers/language-provider";
 import { translateVerdict } from "@/lib/translations";
 import { parseJsonResponse } from "@/lib/safe-json";
 import { apiFetch } from "@/lib/api-fetch";
+import { posthog } from "@/app/providers/posthog-provider";
 
 type PaymentReceiptInfo = {
   amount?: string;
@@ -132,7 +133,21 @@ function ResultView() {
   // scanned the code directly in one of those apps — see the `upiLink`
   // comment on the Result type above for why this is only ever present
   // for a clean, QR-originated payee_reputation result.
-  function openUpiApp(link: string) {
+  //
+  // Client-side-only posthog.capture() (same pattern as app/login/
+  // page.tsx's user_signed_up/user_signed_in calls — this is a pure UI
+  // interaction, never a server route, so it doesn't go through lib/
+  // analytics.ts's track()). Added the same day the button shipped,
+  // specifically to answer "does this actually get used" with real data
+  // instead of a guess — the denominator (how many clean, non-Scam payee
+  // results were shown at all) is already derivable from the existing
+  // verification_completed server event's verdict property on the
+  // verify-payee/deep-payee routes, so this click is the only new event
+  // needed to compute a real click-through rate. mode is the only
+  // property attached — no payee name/UPI ID, consistent with this
+  // codebase's existing analytics privacy convention.
+  function openUpiApp(link: string, mode?: "quick" | "deep") {
+    posthog.capture("proceed_to_pay_clicked", { mode });
     window.location.href = link;
   }
 
@@ -451,7 +466,7 @@ function ResultView() {
                 <>
                   <p className="hint" style={{ marginTop: 20 }}>{t("result.proceedToPayHint")}</p>
                   <div className="result-actions">
-                    <button onClick={() => openUpiApp(r.upiLink!)}>{t("result.proceedToPay")}</button>
+                    <button onClick={() => openUpiApp(r.upiLink!, r.mode)}>{t("result.proceedToPay")}</button>
                   </div>
                 </>
               )}
