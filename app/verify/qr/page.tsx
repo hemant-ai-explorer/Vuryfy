@@ -10,6 +10,7 @@ import { parseJsonResponse } from "@/lib/safe-json";
 import { useElapsedSeconds } from "@/lib/use-elapsed-seconds";
 import { useCreditsTotal } from "@/lib/use-credits";
 import { apiFetch } from "@/lib/api-fetch";
+import { isNativePlatform, pickNativePhoto } from "@/lib/native-camera";
 
 // QR Quick Check — the next step in the locked media-type build order
 // (text + link, then QR, then image, then audio/video). The QR image is
@@ -238,6 +239,14 @@ export default function VerifyQrPage() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
+  // Nov 27, 2026: native camera/photo-library access — see
+  // lib/native-camera.ts's header. Feeds the SAME handleFile() the file
+  // input's onChange already uses, so QR decoding downstream is unchanged.
+  async function handleNativePick() {
+    const file = await pickNativePhoto();
+    if (file) await handleFile(file);
+  }
+
   // Nov 25, 2026: live credit count in the nav bar, matching the home
   // screen — see lib/use-credits.ts's header.
   const creditsTotal = useCreditsTotal();
@@ -263,20 +272,38 @@ export default function VerifyQrPage() {
                 bug as app/verify/image/page.tsx's identical input (see its
                 comment): forced camera-only capture, no "Photo Library"
                 option in the picker. */}
-            <input
-              ref={fileInputRef}
-              id="qr-file"
-              type="file"
-              accept="image/*"
-              className="qr-file-input"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFile(file);
-              }}
-            />
-            <label htmlFor="qr-file" className="primary-link">
-              {decoding ? t("status.reading") : t("qr.choosePhoto")}
-            </label>
+            {/* Nov 27, 2026: same native-camera gap as the Image verify
+                screen (see lib/native-camera.ts's header) — a plain file
+                input only offers a gallery picker on Android inside the
+                Capacitor app, no camera option, so the native build uses
+                @capacitor/camera's native prompt instead. Web is unchanged. */}
+            {isNativePlatform() ? (
+              <button
+                type="button"
+                className="primary-link"
+                onClick={handleNativePick}
+                disabled={decoding}
+              >
+                {decoding ? t("status.reading") : t("qr.choosePhoto")}
+              </button>
+            ) : (
+              <>
+                <input
+                  ref={fileInputRef}
+                  id="qr-file"
+                  type="file"
+                  accept="image/*"
+                  className="qr-file-input"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleFile(file);
+                  }}
+                />
+                <label htmlFor="qr-file" className="primary-link">
+                  {decoding ? t("status.reading") : t("qr.choosePhoto")}
+                </label>
+              </>
+            )}
             {decodeError && <p className="error">{decodeError}</p>}
             <p className="hint">
               {t("qr.hintPhotoText")} <Link href="/verify/image">{t("hint.checkIt")}</Link>

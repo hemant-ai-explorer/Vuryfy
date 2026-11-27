@@ -10,6 +10,7 @@ import { parseJsonResponse } from "@/lib/safe-json";
 import { useElapsedSeconds } from "@/lib/use-elapsed-seconds";
 import { useCreditsTotal } from "@/lib/use-credits";
 import { apiFetch } from "@/lib/api-fetch";
+import { isNativePlatform, pickNativePhoto } from "@/lib/native-camera";
 
 // Image input — the next step in the locked media-type build order (text +
 // link -> QR -> image -> audio/video). Offers up to two independent
@@ -128,6 +129,15 @@ function ImageForm() {
     } finally {
       setProcessing(false);
     }
+  }
+
+  // Nov 27, 2026: native camera/photo-library access — see
+  // lib/native-camera.ts's header for why the plain file input below isn't
+  // enough on Android. Feeds the SAME handleFile() the file input's
+  // onChange already uses, so OCR/vision analysis downstream is unchanged.
+  async function handleNativePick() {
+    const file = await pickNativePhoto();
+    if (file) await handleFile(file);
   }
 
   useEffect(() => {
@@ -273,20 +283,39 @@ function ImageForm() {
                 Library" option in the picker). Audio/video's inputs never
                 had `capture` and always showed the full picker (Photo
                 Library / Take Photo / Choose File) — matching that here. */}
-            <input
-              ref={fileInputRef}
-              id="image-file"
-              type="file"
-              accept="image/*"
-              className="qr-file-input"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFile(file);
-              }}
-            />
-            <label htmlFor="image-file" className="primary-link">
-              {processing ? t("status.reading") : t("qr.choosePhoto")}
-            </label>
+            {/* Nov 27, 2026: inside the Capacitor native app, a plain file
+                input only offers a gallery picker on Android — no camera
+                option at all (confirmed on-device) — so the native build
+                uses @capacitor/camera's native prompt instead. The web app
+                is completely unaffected: isNativePlatform() is false there,
+                so it keeps using the exact file input below. */}
+            {isNativePlatform() ? (
+              <button
+                type="button"
+                className="primary-link"
+                onClick={handleNativePick}
+                disabled={processing}
+              >
+                {processing ? t("status.reading") : t("qr.choosePhoto")}
+              </button>
+            ) : (
+              <>
+                <input
+                  ref={fileInputRef}
+                  id="image-file"
+                  type="file"
+                  accept="image/*"
+                  className="qr-file-input"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleFile(file);
+                  }}
+                />
+                <label htmlFor="image-file" className="primary-link">
+                  {processing ? t("status.reading") : t("qr.choosePhoto")}
+                </label>
+              </>
+            )}
             {processError && <p className="error">{processError}</p>}
             <p className="hint">
               {t("image.hintQrText")} <Link href="/verify/qr">{t("image.hintQrLink")}</Link>
