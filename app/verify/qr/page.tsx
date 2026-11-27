@@ -87,13 +87,13 @@ export default function VerifyQrPage() {
   const [decodeError, setDecodeError] = useState("");
   const [submitting, setSubmitting] = useState<"quick" | "deep" | null>(null);
   const [submitError, setSubmitError] = useState("");
-  // Sept 23, 2026: "quick-name" is a third, distinct loading state — the
-  // real bank-verified registered-name lookup on a Quick Check is its own
-  // button now (not a checkbox modifying the plain Quick Check button —
-  // see app/api/verify-payee/route.ts's header for the 2-credit cost
-  // rationale). Deep Investigation always includes the lookup for free, so
-  // it doesn't need a variant.
-  const [payeeChecking, setPayeeChecking] = useState<"quick" | "quick-name" | "deep" | null>(null);
+  // Nov 27, 2026: the real bank-verified registered-name lookup (Decentro
+  // VerifyPay) that used to live behind a separate "Quick Check +
+  // Registered Name — 2 credits" button has been removed from this screen
+  // entirely — see the removal note near investigatePayee() and the
+  // payee-actions JSX below for why. payeeChecking is back to a plain
+  // two-state union.
+  const [payeeChecking, setPayeeChecking] = useState<"quick" | "deep" | null>(null);
   const [payeeCheckError, setPayeeCheckError] = useState("");
   // Sept 20, 2026: "still working" progress indicators for both Deep
   // Investigation buttons on this screen — see lib/use-elapsed-seconds.ts.
@@ -102,11 +102,9 @@ export default function VerifyQrPage() {
   // Sept 29, 2026: same "still working" indicator, now also on both Quick
   // Check buttons (see app/verify/image/page.tsx's identical addition for
   // the rationale — a real user report that Quick Check felt stuck with no
-  // feedback at all). "quick-name" (the registered-name variant) shares
-  // payeeQuickElapsed with plain "quick" since only one payee button can be
-  // active at a time.
+  // feedback at all).
   const quickElapsed = useElapsedSeconds(submitting === "quick");
-  const payeeQuickElapsed = useElapsedSeconds(payeeChecking === "quick" || payeeChecking === "quick-name");
+  const payeeQuickElapsed = useElapsedSeconds(payeeChecking === "quick");
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -221,13 +219,19 @@ export default function VerifyQrPage() {
     }
   }
 
-  // Sept 23, 2026: withRegisteredName is only meaningful for mode "quick"
-  // (it's what the "Quick Check + Registered Name" button passes) —
-  // /api/deep-payee always includes the lookup regardless of this flag, so
-  // the Deep Investigation button never needs to pass it.
-  async function investigatePayee(mode: "quick" | "deep", withRegisteredName = false) {
+  // Nov 27, 2026: the "Quick Check + Registered Name" 2-credit opt-in
+  // (`include_registered_name: true`) has been removed from this screen —
+  // see the removal note near the payee-actions JSX below for the full
+  // reason (Decentro's VerifyPay, the only backend ever wired up for this,
+  // is blocked for Vuryfy as an unregulated entity — see
+  // business-ops-2026-10-21.md — so that 2-credit button was silently
+  // charging double credits for a lookup that could never succeed). The
+  // route (app/api/verify-payee/route.ts) still accepts the flag so the
+  // backend/billing logic doesn't need touching if a vendor ever works
+  // out — this screen just never sends it anymore.
+  async function investigatePayee(mode: "quick" | "deep") {
     if (!paymentInfo?.payeeId) return;
-    setPayeeChecking(mode === "quick" && withRegisteredName ? "quick-name" : mode);
+    setPayeeChecking(mode);
     setPayeeCheckError("");
     try {
       const endpoint = mode === "quick" ? "/api/verify-payee" : "/api/deep-payee";
@@ -237,7 +241,6 @@ export default function VerifyQrPage() {
         body: JSON.stringify({
           payee_name: paymentInfo.payeeName ?? "",
           upi_id: paymentInfo.payeeId,
-          include_registered_name: mode === "quick" ? withRegisteredName : undefined,
         }),
       });
       const d = await parseJsonResponse(r);
@@ -380,34 +383,43 @@ export default function VerifyQrPage() {
             {paymentInfo.kind === "upi" && paymentInfo.payeeId ? (
               <div className="qr-decoded">
                 <p className="hint">{t("qr.investigateHint")}</p>
-                {/* Sept 23, 2026: three distinct buttons, QC → QC+Registered
-                    Name → DI, each with its own caption underneath stating
-                    exactly what that option shows — replaces the earlier
-                    single lead-in sentence (removed) and checkbox (removed
-                    before that). All three are styled identically (none use
-                    "secondary") since they're three equally-weighted paid
-                    options here, unlike the plain claim confirm screen
-                    where Quick Check is the default action and Deep
-                    Investigation/Scan another are visually secondary. The
-                    real bank-verified registered-name lookup is its own
-                    button at its own 2-credit price, separate from plain
-                    Quick Check; Deep Investigation always includes it for
-                    free. See app/api/verify-payee/route.ts's header for the
-                    cost rationale. */}
+                {/* Sept 23, 2026: two distinct buttons, QC → DI, each with
+                    its own caption underneath stating exactly what that
+                    option shows — replaces the earlier single lead-in
+                    sentence (removed) and checkbox (removed before that).
+                    Both are styled identically (neither uses "secondary")
+                    since they're two equally-weighted paid options here,
+                    unlike the plain claim confirm screen where Quick Check
+                    is the default action and Deep Investigation/Scan
+                    another are visually secondary.
+
+                    Nov 27, 2026: REMOVED the third "Quick Check +
+                    Registered Name — 2 credits" button that used to sit
+                    between these two. Per business-ops-2026-10-21.md, every
+                    vendor researched for the real bank-verified
+                    registered-name lookup (Decentro's VerifyPay, then
+                    Signzy, then Cashfree) turned out to require Vuryfy to
+                    be an RBI/SEBI-regulated entity, which it isn't — so
+                    that lookup can never actually resolve right now. The
+                    2-credit button was charging users double credits for a
+                    check that silently always came back empty
+                    (verifyRegisteredName() → {available:false} on missing
+                    provider config, see lib/vpa-registered-name.ts).
+                    Removed rather than left up, since a button that can
+                    never deliver what it's priced for is worse than no
+                    button. Deep Investigation's caption below was also
+                    reworded for the same reason — it used to promise the
+                    verified registered name "at no extra cost," which was
+                    equally never going to be true. The backend route
+                    (app/api/verify-payee/route.ts) still accepts
+                    include_registered_name unused, so nothing needs to
+                    change there if a vendor ever works out. */}
                 <div className="result-actions payee-actions">
                   <div className="payee-action">
                     <button onClick={() => investigatePayee("quick")} disabled={!!payeeChecking}>
                       {payeeChecking === "quick" ? `${t("claim.checking")} (${payeeQuickElapsed}s)` : t("claim.quickCheck")}
                     </button>
                     <p className="hint">{t("qr.quickCheckCaption")}</p>
-                  </div>
-                  <div className="payee-action">
-                    <button onClick={() => investigatePayee("quick", true)} disabled={!!payeeChecking}>
-                      {payeeChecking === "quick-name"
-                        ? `${t("claim.checking")} (${payeeQuickElapsed}s)`
-                        : t("qr.quickCheckWithNameLabel")}
-                    </button>
-                    <p className="hint">{t("qr.quickCheckWithNameCaption")}</p>
                   </div>
                   <div className="payee-action">
                     <button onClick={() => investigatePayee("deep")} disabled={!!payeeChecking}>

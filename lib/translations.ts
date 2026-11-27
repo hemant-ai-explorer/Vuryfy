@@ -307,27 +307,29 @@ const en: Dictionary = {
   "qr.similarNameCaution": "This name is very close to {name} (ID: {id}), which you've scanned before in Vuryfy — but this QR code uses a different payment ID. This is a common impersonation pattern. Vuryfy can't tell you which of the two is the real one — verify directly with who you intend to pay before proceeding.",
   "qr.paymentCaution": "Vuryfy can't verify who actually controls a payment ID from a QR code alone — that isn't something a web search can confirm. Before paying, make sure the name above matches who you intend to pay, and confirm directly with them if you're unsure.",
   "qr.investigateHint": "This searches the public web for the payee's name and ID — scam reports, complaints, or a legitimate business presence. It still can't confirm this transaction or who controls the ID; it can only tell you what's publicly findable, which may be nothing either way.",
-  // Sept 23, 2026: the three-way choice for a UPI payee investigation —
-  // plain Quick Check, Quick Check + Registered Name (its own button, 2
-  // credits), or Deep Investigation (which always includes the registered
-  // name at no extra cost). Each of the three buttons on
-  // app/verify/qr/page.tsx now carries its own one-line caption
-  // (qr.quickCheckCaption / qr.quickCheckWithNameCaption /
-  // qr.deepIncludesNameHint) stating exactly what that option shows,
-  // replacing an earlier single lead-in sentence. See
-  // app/api/verify-payee/route.ts's header for the cost rationale behind
-  // the 2-credit option. Shipped English-only, then translated into Hindi
-  // the same day after a user report that the QC+Registered-Name button
-  // and its caption stayed in English under the Hindi UI — see this same
-  // key set in the `hi` section below. The other 7 launch languages
-  // (kn/ml/ta/te/gu/bn/mr, each in its own translations-<code>.ts file)
-  // still fall back to English for these 4 keys — same known-gap
-  // convention as this codebase's other small recent UI additions, not
-  // yet closed for those.
+  // Sept 23, 2026: originally a three-way choice for a UPI payee
+  // investigation — plain Quick Check, Quick Check + Registered Name (its
+  // own button, 2 credits), or Deep Investigation (which always included
+  // the registered name at no extra cost). Each button on
+  // app/verify/qr/page.tsx carries its own one-line caption
+  // (qr.quickCheckCaption / qr.deepIncludesNameHint) stating exactly what
+  // that option shows, replacing an earlier single lead-in sentence.
+  //
+  // Nov 27, 2026: the "Quick Check + Registered Name" button and its
+  // qr.quickCheckWithNameLabel/qr.quickCheckWithNameCaption keys were
+  // REMOVED (not just hidden) from here and from every other
+  // translations-<code>.ts file — see app/verify/qr/page.tsx's own removal
+  // comment and business-ops-2026-10-21.md for why: every vendor
+  // researched for the real bank-verified registered-name lookup
+  // (Decentro, Signzy, Cashfree) requires Vuryfy to be an RBI/SEBI-
+  // regulated entity, which it isn't, so that 2-credit button was
+  // charging users double credits for a lookup that could never resolve.
+  // qr.deepIncludesNameHint was reworded the same day for the same reason
+  // — it used to promise a registered name "at no extra cost" that was
+  // equally never coming — in this file and all 7 other launch-language
+  // files.
   "qr.quickCheckCaption": "Shows the payee name",
-  "qr.quickCheckWithNameCaption": "Shows the payee name + who it's actually registered to",
-  "qr.quickCheckWithNameLabel": "Quick Check + Registered Name — 2 credits",
-  "qr.deepIncludesNameHint": "Deep Investigation always includes the verified registered name, at no extra cost.",
+  "qr.deepIncludesNameHint": "Shows the payee name, with a deeper reputation search",
   // Sept 17, 2026: shown for a non-UPI payment link (paypal.me, etc. — no
   // payee name/ID to investigate), on the pre-choice screen that now
   // deliberately withholds identity until after Quick Check/Deep
@@ -675,13 +677,13 @@ const hi: Dictionary = {
   "qr.similarNameCaution": "यह नाम {name} (ID: {id}) से काफी मिलता-जुलता है, जिसे आपने पहले वुर्यफाई में स्कैन किया था — लेकिन इस QR कोड का भुगतान ID अलग है। यह एक आम प्रतिरूपण पैटर्न है। वुर्यफाई यह नहीं बता सकता कि इनमें से कौन-सा असली है — भुगतान करने से पहले जिसे आप भुगतान करना चाहते हैं, उससे सीधे पुष्टि करें।",
   "qr.paymentCaution": "वुर्यफाई यह पुष्टि नहीं कर सकता कि QR कोड से भुगतान ID को वाकई कौन नियंत्रित करता है — यह कोई वेब सर्च से पता नहीं चलता। भुगतान करने से पहले सुनिश्चित करें कि ऊपर दिया गया नाम उस व्यक्ति से मेल खाता है जिसे आप भुगतान करना चाहते हैं, और अगर अनिश्चित हों तो सीधे उनसे पुष्टि करें।",
   "qr.investigateHint": "यह प्राप्तकर्ता के नाम और ID के लिए सार्वजनिक वेब पर खोज करता है — धोखाधड़ी की रिपोर्ट, शिकायतें, या किसी वैध व्यवसाय की मौजूदगी। यह अब भी इस लेन-देन या यह ID किसे नियंत्रित करता है, इसकी पुष्टि नहीं कर सकता; यह केवल वही बता सकता है जो सार्वजनिक रूप से मिल सकता है, जो दोनों ही तरह से कुछ न भी हो सकता है।",
-  // Sept 23, 2026: closes the i18n gap flagged right after these keys
-  // shipped English-only — see lib/translations.ts's English `en` section
-  // for the identical comment and the full feature rationale.
+  // Nov 27, 2026: "qr.quickCheckWithNameLabel"/"qr.quickCheckWithNameCaption"
+  // removed — see lib/translations.ts's English `en` section above for the
+  // full rationale (the registered-name lookup those powered can never
+  // resolve for Vuryfy right now). qr.deepIncludesNameHint reworded for the
+  // same reason, same day.
   "qr.quickCheckCaption": "प्राप्तकर्ता का नाम दिखाता है",
-  "qr.quickCheckWithNameCaption": "प्राप्तकर्ता का नाम + यह वास्तव में किसके नाम पर पंजीकृत है, दिखाता है",
-  "qr.quickCheckWithNameLabel": "क्विक चेक + पंजीकृत नाम — 2 क्रेडिट",
-  "qr.deepIncludesNameHint": "डीप इन्वेस्टिगेशन में हमेशा सत्यापित पंजीकृत नाम शामिल होता है, बिना किसी अतिरिक्त शुल्क के।",
+  "qr.deepIncludesNameHint": "प्राप्तकर्ता का नाम + अधिक गहन प्रतिष्ठा खोज दिखाता है",
   "qr.paymentLinkHint": "यह एक भुगतान लिंक है। वुर्यफाई यह पुष्टि नहीं कर सकता कि इसे कौन नियंत्रित करता है, और न ही इसकी आगे जांच कर सकता है — आगे बढ़ने से पहले जिसे आप भुगतान करना चाहते हैं, उससे सीधे पुष्टि करें।",
   "qr.scanAnother": "दूसरा स्कैन करें",
   "qr.decodedBadge": "हमें आपके QR कोड में यह मिला",
