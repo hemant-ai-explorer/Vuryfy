@@ -253,6 +253,16 @@ const en: Dictionary = {
   // evidence, caveats still render in full either way).
   "result.payeeBadge": "PAYEE",
   "result.payeeClear": "No public scam reports found for this payee.",
+  // Nov 27, 2026 — "proceed to pay" hand-off (see app/result/page.tsx's
+  // openUpiApp()): shown only when this payee-reputation result came from
+  // a real UPI QR code (r.upiLink carries the original decoded
+  // upi://pay?... deep link) AND the verdict isn't "Scam". Tapping it
+  // hands off straight into the user's own UPI app (GPay/PhonePe/whichever
+  // is installed) with the same payment details already in the link — the
+  // goal is for Vuryfy to be the step right before paying, not a separate
+  // detour away from it.
+  "result.proceedToPayHint": "No issues found. You can continue to pay using your UPI app.",
+  "result.proceedToPay": "Proceed to pay",
   // Sept 23, 2026: rendered by app/result/page.tsx only when
   // r.registeredIdentity?.available is true — i.e. only once a real VPA-
   // verification provider is wired into lib/vpa-registered-name.ts. Until
@@ -631,6 +641,8 @@ const hi: Dictionary = {
     "यह इस प्राप्तकर्ता के बारे में रिपोर्ट के लिए सार्वजनिक वेब पर खोज करता है — यह पुष्टि नहीं कर सकता कि पेमेंट ID पर वास्तव में किसका नियंत्रण है, और कुछ न मिलने का मतलब यह नहीं कि वे वैध हैं। ज़्यादातर असली व्यवसायों और ज़्यादातर धोखेबाज़ों, दोनों का अक्सर वेब पर बहुत कम या कोई खोजने योग्य निशान नहीं होता।",
   "result.payeeBadge": "प्राप्तकर्ता",
   "result.payeeClear": "इस प्राप्तकर्ता के लिए कोई सार्वजनिक धोखाधड़ी रिपोर्ट नहीं मिली।",
+  "result.proceedToPayHint": "कोई समस्या नहीं मिली। आप अपने UPI ऐप में भुगतान जारी रख सकते हैं।",
+  "result.proceedToPay": "भुगतान करें",
   "result.registeredNameLabel": "पंजीकृत नाम: ",
   "result.registeredNameMismatch":
     "यह QR कोड पर दिखाए गए नाम से मेल नहीं खाता — आगे बढ़ने से पहले जिसे आप भुगतान करना चाहते हैं, उससे सीधे पुष्टि करें।",

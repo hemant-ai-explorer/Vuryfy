@@ -253,7 +253,22 @@ export default function VerifyQrPage() {
         }
         throw new Error(d.error || "Investigation failed");
       }
-      sessionStorage.setItem("vuryfy_result", JSON.stringify({ ...d, return_to: "/verify/qr" }));
+      // Nov 27, 2026: "proceed to pay" hand-off — carry the original
+      // decoded upi://pay?... link through to the result page as
+      // `upiLink`, a client-side-only field (same pattern as return_to
+      // above) so a clean, non-Scam result can offer a one-tap button
+      // straight into the user's UPI app. Only ever set here, where the
+      // payee genuinely came from a scanned UPI QR code — the
+      // payment_request re-investigate flow on the result page has no
+      // equivalent scannable link, so it never sets this field.
+      sessionStorage.setItem(
+        "vuryfy_result",
+        JSON.stringify({
+          ...d,
+          return_to: "/verify/qr",
+          upiLink: paymentInfo.kind === "upi" ? paymentInfo.raw : null,
+        })
+      );
       router.push(`/result?id=${d.id}`);
     } catch (e: any) {
       setPayeeCheckError(e.message);

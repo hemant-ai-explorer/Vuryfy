@@ -98,6 +98,17 @@ type Result = {
   // even when that isn't simply /verify or /deep. Absent on every other
   // result, which falls back to the mode-based logic below unchanged.
   return_to?: string;
+  // Client-side only, not something the API returns (Nov 27, 2026) — set
+  // by app/verify/qr/page.tsx's investigatePayee() when, and only when,
+  // this payee_reputation result came from a real scanned UPI QR code. It
+  // carries the original decoded upi://pay?... deep link, so a clean
+  // (non-Scam) result can offer a one-tap "Proceed to pay" button straight
+  // into the user's own UPI app (GPay/PhonePe/whichever is installed),
+  // with the same payment details already in the link. Deliberately
+  // absent for the payment_request re-investigate flow below (and for any
+  // result fetched by id via /api/verifications/[id]) — neither of those
+  // has an actual scannable QR link to hand off to, only OCR'd text.
+  upiLink?: string | null;
 };
 
 function ResultView() {
@@ -114,6 +125,16 @@ function ResultView() {
   // completely silently. shareStatus drives a small inline message next to
   // the button, reset after a couple seconds so it doesn't linger.
   const [shareStatus, setShareStatus] = useState<"idle" | "copied" | "error">("idle");
+
+  // Nov 27, 2026: hands a QR-sourced payee's original upi://pay?... link
+  // straight to the OS/Capacitor WebView, which launches the installed UPI
+  // app chooser (GPay, PhonePe, Paytm, etc.) exactly as if the user had
+  // scanned the code directly in one of those apps — see the `upiLink`
+  // comment on the Result type above for why this is only ever present
+  // for a clean, QR-originated payee_reputation result.
+  function openUpiApp(link: string) {
+    window.location.href = link;
+  }
 
   async function shareResultText(text: string) {
     try {
@@ -418,6 +439,21 @@ function ResultView() {
                   {t("result.confidencePrefix")}
                   {r.confidence}%
                 </div>
+              )}
+              {/* Nov 27, 2026: "proceed to pay" hand-off — only for a
+                  clean (non-Scam) result that actually came from a
+                  scanned UPI QR code (r.upiLink), never for the
+                  payment_request re-investigate path above, which has no
+                  real link to hand off to. The goal is for Vuryfy to sit
+                  one step before GPay/PhonePe, not add a dead end after a
+                  clean result. */}
+              {r.upiLink && (
+                <>
+                  <p className="hint" style={{ marginTop: 20 }}>{t("result.proceedToPayHint")}</p>
+                  <div className="result-actions">
+                    <button onClick={() => openUpiApp(r.upiLink!)}>{t("result.proceedToPay")}</button>
+                  </div>
+                </>
               )}
             </>
           )}
