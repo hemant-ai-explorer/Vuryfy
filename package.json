@@ -11,8 +11,8 @@
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",
-    "@capacitor/cli": "^8.5.2",
-    "@capacitor/core": "^8.5.2",
+    "@capacitor/cli": "^8.6.2",
+    "@capacitor/core": "^8.6.2",
     "@supabase/ssr": "^0.5.0",
     "@supabase/supabase-js": "^2.45.0",
     "js-sha3": "^0.16.0",
@@ -26,6 +26,7 @@
     "tesseract.js": "^5.1.0"
   },
   "devDependencies": {
+    "@capacitor/assets": "^4.0.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
