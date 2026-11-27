@@ -10,6 +10,7 @@
     "build:capacitor": "node scripts/build-capacitor.js"
   },
   "dependencies": {
+    "@capacitor-mlkit/barcode-scanning": "^8.2.2",
     "@capacitor/android": "^8.5.2",
     "@capacitor/camera": "^8.2.6",
     "@capacitor/cli": "^8.6.2",
